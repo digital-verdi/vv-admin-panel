@@ -79,21 +79,20 @@ export function Sidebar({ user, collapsed, onToggle }: t.SidebarProps) {
         aria-label={localize('com_a11y_admin_panel')}
         className={cn(
           'sticky top-0 z-(--z-floating) flex h-screen shrink-0 flex-col overflow-hidden border-r border-(--cui-color-stroke-default) bg-(--cui-color-background-panel) transition-[width] duration-200',
-          collapsed ? 'w-14' : 'w-[252px]',
+          collapsed ? 'w-14' : 'w-63',
         )}
       >
-        <div
-          className={cn(
-            'flex shrink-0 items-center',
-            collapsed ? 'h-14 justify-center px-2' : 'h-14 gap-2 px-3',
-          )}
-        >
-          <img src={libreChatLogo} alt="LibreChat" className="h-6 w-6 shrink-0" />
-          {!collapsed && (
-            <span className="flex-1 truncate text-sm font-semibold text-(--cui-color-text-default)">
-              Admin Panel
-            </span>
-          )}
+        <div className="flex h-14 shrink-0 items-center px-2">
+          <div
+            className={cn('flex items-center', collapsed ? 'w-9 justify-center' : 'gap-2.5 px-1.5')}
+          >
+            <img src={libreChatLogo} alt="LibreChat" className="h-6 w-6 shrink-0" />
+            {!collapsed && (
+              <span className="flex-1 truncate text-sm font-semibold text-(--cui-color-text-default)">
+                Admin Panel
+              </span>
+            )}
+          </div>
         </div>
 
         <nav className="flex-1 overflow-y-auto px-2 py-2" role="navigation">
@@ -123,66 +122,68 @@ export function Sidebar({ user, collapsed, onToggle }: t.SidebarProps) {
         </nav>
 
         {initials && (
-          <div
-            className={cn(
-              'flex shrink-0 items-center border-t border-(--cui-color-stroke-default) py-3',
-              collapsed ? 'justify-center' : 'px-3',
-            )}
-          >
-            <Dropdown>
-              <Dropdown.Trigger>
-                <button
-                  ref={userMenuRef}
-                  type="button"
-                  className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full border border-(--cui-color-stroke-default) bg-(--cui-color-background-default) transition-colors hover:border-(--cui-color-stroke-intense) hover:bg-(--cui-color-background-hover)"
-                  aria-label={`${localize('com_nav_user_menu')}, ${user?.name || user?.email || ''}`}
-                  aria-haspopup="true"
-                  title={user?.name || user?.email || ''}
-                >
-                  <span
-                    aria-hidden="true"
-                    className="text-xs font-medium text-(--cui-color-text-muted)"
+          <div className="flex shrink-0 items-center border-t border-(--cui-color-stroke-default) px-2 py-3">
+            <div
+              className={cn(
+                'flex items-center',
+                collapsed ? 'w-9 justify-center' : 'gap-2.5 px-0.5',
+              )}
+            >
+              <Dropdown>
+                <Dropdown.Trigger>
+                  <button
+                    ref={userMenuRef}
+                    type="button"
+                    className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full border border-(--cui-color-stroke-default) bg-(--cui-color-background-default) transition-colors hover:border-(--cui-color-stroke-intense) hover:bg-(--cui-color-background-hover)"
+                    aria-label={`${localize('com_nav_user_menu')}, ${user?.name || user?.email || ''}`}
+                    aria-haspopup="true"
+                    title={user?.name || user?.email || ''}
                   >
-                    {initials}
-                  </span>
-                </button>
-              </Dropdown.Trigger>
-              <Dropdown.Content>
-                <div className="user-dropdown flex min-w-45 flex-col select-none">
-                  {user && (
-                    <div className="px-3 pt-3 pb-2">
-                      <span className="block text-sm leading-tight font-medium text-(--cui-color-text-default)">
-                        {user.name || ''}
-                      </span>
-                      {user.email && (
-                        <span className="mt-0.5 block text-xs leading-tight text-(--cui-color-text-muted)">
-                          {user.email}
+                    <span
+                      aria-hidden="true"
+                      className="text-xs font-medium text-(--cui-color-text-muted)"
+                    >
+                      {initials}
+                    </span>
+                  </button>
+                </Dropdown.Trigger>
+                <Dropdown.Content>
+                  <div className="user-dropdown flex min-w-45 flex-col select-none">
+                    {user && (
+                      <div className="px-3 pt-3 pb-2">
+                        <span className="block text-sm leading-tight font-medium text-(--cui-color-text-default)">
+                          {user.name || ''}
                         </span>
-                      )}
-                    </div>
-                  )}
-                  <div className="border-t border-(--cui-color-stroke-default)" />
-                  <Dropdown.Item icon="settings" onClick={() => setSettingsOpen(true)}>
-                    {localize('com_ui_settings')}
-                  </Dropdown.Item>
-                  <Dropdown.Item icon="slide-out" onClick={handleLogout} disabled={isLoggingOut}>
-                    {isLoggingOut ? localize('com_ui_signing_out') : localize('com_ui_sign_out')}
-                  </Dropdown.Item>
-                </div>
-              </Dropdown.Content>
-            </Dropdown>
-            {!collapsed && user && (
-              <div className="ml-2 min-w-0 flex-1">
-                <span className="block truncate text-sm leading-tight font-medium text-(--cui-color-text-default)">
-                  {user.name || ''}
-                </span>
-                {user.email && (
-                  <span className="block truncate text-xs leading-tight text-(--cui-color-text-muted)">
-                    {user.email}
+                        {user.email && (
+                          <span className="mt-0.5 block text-xs leading-tight text-(--cui-color-text-muted)">
+                            {user.email}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    <div className="border-t border-(--cui-color-stroke-default)" />
+                    <Dropdown.Item icon="settings" onClick={() => setSettingsOpen(true)}>
+                      {localize('com_ui_settings')}
+                    </Dropdown.Item>
+                    <Dropdown.Item icon="slide-out" onClick={handleLogout} disabled={isLoggingOut}>
+                      {isLoggingOut ? localize('com_ui_signing_out') : localize('com_ui_sign_out')}
+                    </Dropdown.Item>
+                  </div>
+                </Dropdown.Content>
+              </Dropdown>
+              {!collapsed && user && (
+                <div className="min-w-0 flex-1">
+                  <span className="block truncate text-sm leading-tight font-medium text-(--cui-color-text-default)">
+                    {user.name || ''}
                   </span>
-                )}
-              </div>
-            )}
+                  {user.email && (
+                    <span className="block truncate text-xs leading-tight text-(--cui-color-text-muted)">
+                      {user.email}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         )}
 

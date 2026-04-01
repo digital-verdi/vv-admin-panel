@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
 import { MultiAccordion } from '@clickhouse/click-ui';
 import type * as t from '@/types';
+import { SECTION_RENDERERS, SELF_CONTAINED_SECTION_RENDERERS } from './sections';
 import { FieldRenderer, SingleFieldRenderer } from './FieldRenderer';
 import { ConfigSection } from './ConfigSection';
-import { SECTION_RENDERERS, SELF_CONTAINED_SECTION_RENDERERS } from './sections';
 import { CodeField } from './fields/CodeField';
 import { isSectionDisabled } from '@/utils';
 import { InfoBanner } from './InfoBanner';

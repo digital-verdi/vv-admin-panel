@@ -6,8 +6,8 @@ import { useCapabilities, useCommandMenu, useLocalize } from '@/hooks';
 import { CommandMenu } from '@/components/CommandMenu';
 import { AccessDenied } from '@/components/shared';
 import { SystemCapabilities } from '@/constants';
-import { verifyAdminTokenFn } from '@/server';
 import { Sidebar } from '@/components/Sidebar';
+import { verifyAdminTokenFn } from '@/server';
 import { Header } from '@/components/Header';
 
 const ROUTE_TITLE_KEYS: Record<string, string> = {

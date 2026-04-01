@@ -1,5 +1,5 @@
-import { useLocalize } from '@/hooks';
 import type * as t from '@/types';
+import { useLocalize } from '@/hooks';
 
 export function Header({ title, onSearchClick, children }: t.HeaderProps) {
   const localize = useLocalize();

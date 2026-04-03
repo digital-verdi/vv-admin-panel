@@ -40,7 +40,7 @@
     "i18next-browser-languagedetector": "^8.2.1",
     "input-otp": "^1.4.2",
     "js-yaml": "^4.1.1",
-    "librechat-data-provider": "^0.8.406",
+    "librechat-data-provider": "^0.8.407",
     "lucide-react": "^0.545.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

@@ -1,6 +1,6 @@
 import { Select } from '@clickhouse/click-ui';
 import TextareaAutosize from 'react-textarea-autosize';
-import { useRef, useLayoutEffect } from 'react';
+import { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import type * as t from '@/types';
 import { AddItemButton, TrashButton } from '@/components/shared';
 import { useLocalize } from '@/hooks';
@@ -12,6 +12,99 @@ const TYPE_LABELS: Record<t.KVValueType, string> = {
   boolean: 'T/F',
   json: '{ }',
 };
+
+function LocalInput({
+  value,
+  onCommit,
+  type = 'text',
+  placeholder,
+  disabled,
+  className,
+  'aria-label': ariaLabel,
+}: {
+  value: string;
+  onCommit: (value: string) => void;
+  type?: string;
+  placeholder?: string;
+  disabled?: boolean;
+  className?: string;
+  'aria-label'?: string;
+}) {
+  const [local, setLocal] = useState(value);
+  const externalRef = useRef(value);
+
+  useEffect(() => {
+    if (value !== externalRef.current) {
+      externalRef.current = value;
+      setLocal(value);
+    }
+  }, [value]);
+
+  const commit = () => {
+    if (local !== externalRef.current) {
+      externalRef.current = local;
+      onCommit(local);
+    }
+  };
+
+  return (
+    <input
+      type={type}
+      value={local}
+      onChange={(e) => setLocal(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => { if (e.key === 'Enter') commit(); }}
+      placeholder={placeholder}
+      disabled={disabled}
+      aria-label={ariaLabel}
+      className={className}
+    />
+  );
+}
+
+function LocalTextarea({
+  value,
+  onCommit,
+  placeholder,
+  disabled,
+  'aria-label': ariaLabel,
+}: {
+  value: string;
+  onCommit: (value: string) => void;
+  placeholder?: string;
+  disabled?: boolean;
+  'aria-label'?: string;
+}) {
+  const [local, setLocal] = useState(value);
+  const externalRef = useRef(value);
+
+  useEffect(() => {
+    if (value !== externalRef.current) {
+      externalRef.current = value;
+      setLocal(value);
+    }
+  }, [value]);
+
+  const commit = () => {
+    if (local !== externalRef.current) {
+      externalRef.current = local;
+      onCommit(local);
+    }
+  };
+
+  return (
+    <TextareaAutosize
+      value={local}
+      onChange={(e) => setLocal(e.target.value)}
+      onBlur={commit}
+      placeholder={placeholder}
+      disabled={disabled}
+      aria-label={ariaLabel}
+      minRows={1}
+      className="config-input w-full resize-none font-mono text-xs"
+    />
+  );
+}
 
 export function KeyValueField({
   id,
@@ -62,10 +155,9 @@ export function KeyValueField({
     const valueLabel = `${localize('com_ui_value')} ${index + 1}`;
     return (
       <div className="flex items-center gap-2" role="listitem">
-        <input
-          type="text"
+        <LocalInput
           value={pair.key}
-          onChange={(e) => handleChange(index, 'key', e.target.value)}
+          onCommit={(v) => handleChange(index, 'key', v)}
           placeholder={keyPlaceholder ?? localize('com_ui_key')}
           disabled={disabled}
           aria-label={`${localize('com_ui_key')} ${index + 1}`}
@@ -84,10 +176,10 @@ export function KeyValueField({
             </Select>
           </div>
         ) : (
-          <input
+          <LocalInput
             type={vType === 'number' ? 'number' : 'text'}
             value={pair.value}
-            onChange={(e) => handleChange(index, 'value', e.target.value)}
+            onCommit={(v) => handleChange(index, 'value', v)}
             placeholder={valuePlaceholder ?? localize('com_ui_value')}
             disabled={disabled}
             aria-label={valueLabel}
@@ -122,10 +214,9 @@ export function KeyValueField({
   const renderJsonRow = (pair: t.KeyValuePair, index: number) => (
     <div className="flex flex-col gap-1" role="listitem">
       <div className="flex items-center gap-2">
-        <input
-          type="text"
+        <LocalInput
           value={pair.key}
-          onChange={(e) => handleChange(index, 'key', e.target.value)}
+          onCommit={(v) => handleChange(index, 'key', v)}
           placeholder={keyPlaceholder ?? localize('com_ui_key')}
           disabled={disabled}
           aria-label={`${localize('com_ui_key')} ${index + 1}`}
@@ -153,14 +244,12 @@ export function KeyValueField({
           />
         )}
       </div>
-      <TextareaAutosize
+      <LocalTextarea
         value={pair.value}
-        onChange={(e) => handleChange(index, 'value', e.target.value)}
+        onCommit={(v) => handleChange(index, 'value', v)}
         placeholder='{"key": "value"}'
         disabled={disabled}
         aria-label={`${localize('com_ui_value')} ${index + 1}`}
-        minRows={1}
-        className="config-input w-full resize-none font-mono text-xs"
       />
     </div>
   );

@@ -6,6 +6,7 @@ WORKDIR /app
 FROM base AS deps
 COPY package.json bun.lock .npmrc ./
 COPY patches/ patches/
+COPY tools/ tools/
 RUN bun install --frozen-lockfile
 
 # --- Build ---
@@ -19,6 +20,7 @@ RUN bun run build
 FROM base AS prod-deps
 COPY package.json bun.lock .npmrc ./
 COPY patches/ patches/
+COPY tools/ tools/
 RUN bun install --frozen-lockfile \
     && bun install --frozen-lockfile --production
 

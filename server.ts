@@ -7,8 +7,10 @@ const SERVER_ENTRY = new URL('./dist/server/server.js', import.meta.url);
 const env = process.env;
 
 const ONE_DAY = 86400;
-const maxAge = Number(env.ADMIN_PANEL_STATIC_CACHE_MAX_AGE ?? env.STATIC_CACHE_MAX_AGE) || ONE_DAY * 2;
-const sMaxAge = Number(env.ADMIN_PANEL_STATIC_CACHE_S_MAX_AGE ?? env.STATIC_CACHE_S_MAX_AGE) || ONE_DAY;
+const rawMaxAge = Number(env.ADMIN_PANEL_STATIC_CACHE_MAX_AGE ?? env.STATIC_CACHE_MAX_AGE);
+const rawSMaxAge = Number(env.ADMIN_PANEL_STATIC_CACHE_S_MAX_AGE ?? env.STATIC_CACHE_S_MAX_AGE);
+const maxAge = Number.isNaN(rawMaxAge) ? ONE_DAY * 2 : rawMaxAge;
+const sMaxAge = Number.isNaN(rawSMaxAge) ? ONE_DAY : rawSMaxAge;
 
 const NO_CACHE: Record<string, string> = {
   'Cache-Control': env.ADMIN_PANEL_INDEX_CACHE_CONTROL ?? env.INDEX_CACHE_CONTROL ?? 'no-cache, no-store, must-revalidate',

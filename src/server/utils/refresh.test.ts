@@ -23,7 +23,7 @@ vi.mock('@tanstack/react-start/server', () => ({
   }),
 }));
 
-vi.mock('./api', () => ({
+vi.mock('./url', () => ({
   getServerApiUrl: () => 'http://lc.test',
   getApiBaseUrl: () => 'http://lc.test',
 }));

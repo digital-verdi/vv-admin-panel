@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { getRequestHeader } from '@tanstack/react-start/server';
 import type * as t from '@/types';
 import { useAppSession } from '../session';
-import { getServerApiUrl } from './api';
+import { getServerApiUrl } from './url';
 
 const refreshResponseSchema = z.object({
   token: z.string(),

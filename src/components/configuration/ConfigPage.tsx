@@ -448,6 +448,30 @@ export function ConfigPage({ initialTab, highlightField, initialScope }: t.Confi
     });
   }, []);
 
+  /** Drops pending sub-edits (so the diff dialog doesn't show a partial state)
+   *  and writes a single `undefined` at the section path; on save this routes
+   *  through `resetBaseConfigFieldFn` → `$unset overrides.<sectionPath>`. */
+  const handleResetSection = useCallback((sectionPath: string) => {
+    if (!sectionPath) return;
+    startTransition(() => {
+      setTouchedPaths((prev) => {
+        const next = new Set(prev);
+        next.add(sectionPath);
+        return next;
+      });
+      setEditedValues((prev) => {
+        const next: t.FlatConfigMap = {};
+        const prefix = `${sectionPath}.`;
+        for (const [k, v] of Object.entries(prev)) {
+          if (k === sectionPath || k.startsWith(prefix)) continue;
+          next[k] = v;
+        }
+        next[sectionPath] = undefined;
+        return next;
+      });
+    });
+  }, []);
+
   const handleConfirmSave = useCallback(async () => {
     if (saving) return;
     const touched = [...touchedPaths].filter((p) => p in editedValues);
@@ -811,6 +835,7 @@ export function ConfigPage({ initialTab, highlightField, initialScope }: t.Confi
               editedValues={editedValues}
               onFieldChange={handleFieldChange}
               onResetField={handleResetField}
+              onResetSection={handleResetSection}
               profileMap={profileMap}
               previewMode={false}
               previewScope={editingScope}

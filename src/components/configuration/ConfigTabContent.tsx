@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { MultiAccordion } from '@clickhouse/click-ui';
+import { Icon, MultiAccordion } from '@clickhouse/click-ui';
 import type * as t from '@/types';
 import { SECTION_RENDERERS, SELF_CONTAINED_SECTION_RENDERERS } from './sections';
 import { FieldRenderer, SingleFieldRenderer } from './FieldRenderer';
@@ -38,6 +38,7 @@ export function ConfigTabContent({
   editedValues,
   onFieldChange,
   onResetField,
+  onResetSection,
   profileMap,
   previewMode,
   previewScope,
@@ -82,6 +83,21 @@ export function ConfigTabContent({
     }
     return result;
   }, [filtering, previewChangedPaths, sections]);
+
+  const sectionHasOverrides = useMemo(() => {
+    const result: Record<string, boolean> = {};
+    const editedPaths = Object.keys(editedValues);
+    for (const section of sections) {
+      const sectionPath = section.schemaKey ?? section.id;
+      const prefix = `${sectionPath}.`;
+      const overridden =
+        (dbOverridePaths &&
+          [...dbOverridePaths].some((p) => p === sectionPath || p.startsWith(prefix))) ||
+        editedPaths.some((p) => p === sectionPath || p.startsWith(prefix));
+      result[section.id] = !!overridden;
+    }
+    return result;
+  }, [sections, dbOverridePaths, editedValues]);
 
   const sectionCounts = useMemo(() => {
     return sections.map((s) => {
@@ -275,6 +291,7 @@ export function ConfigTabContent({
         if (group.kind === 'inline') {
           const { section } = group;
           const counts = countsById[section.id];
+          const sectionPath = section.schemaKey ?? section.id;
           return (
             <ConfigSection
               key={section.id}
@@ -286,6 +303,11 @@ export function ConfigTabContent({
               totalCount={counts?.total ?? 0}
               inline
               showConfiguredOnly={showConfiguredOnly}
+              sectionPath={sectionPath}
+              onResetSection={
+                permissions?.canEdit && !fieldsDisabled ? onResetSection : undefined
+              }
+              hasOverrides={sectionHasOverrides[section.id]}
             >
               {renderSectionContent(section)}
             </ConfigSection>
@@ -301,17 +323,34 @@ export function ConfigTabContent({
             defaultValue={group.sections.map((s) => s.id)}
             data-top-level-accordion
           >
-            {group.sections.map((section) => (
-              <MultiAccordion.Item
-                key={section.id}
-                id={`section-${section.id}`}
-                data-section-id={`section-${section.id}`}
-                value={section.id}
-                title={localize(section.titleKey)}
-              >
-                {renderSectionContent(section)}
-              </MultiAccordion.Item>
-            ))}
+            {group.sections.map((section) => {
+              const sectionPath = section.schemaKey ?? section.id;
+              const canResetSection =
+                !!onResetSection &&
+                !!permissions?.canEdit &&
+                !fieldsDisabled &&
+                !!sectionHasOverrides[section.id];
+              const titleNode = canResetSection ? (
+                <AccordionSectionHeader
+                  title={localize(section.titleKey)}
+                  sectionPath={sectionPath}
+                  onResetSection={onResetSection!}
+                />
+              ) : (
+                localize(section.titleKey)
+              );
+              return (
+                <MultiAccordion.Item
+                  key={section.id}
+                  id={`section-${section.id}`}
+                  data-section-id={`section-${section.id}`}
+                  value={section.id}
+                  title={titleNode}
+                >
+                  {renderSectionContent(section)}
+                </MultiAccordion.Item>
+              );
+            })}
           </MultiAccordion>
         );
       })}
@@ -332,4 +371,45 @@ function hasChangedDescendant(
     }
   }
   return false;
+}
+
+function AccordionSectionHeader({
+  title,
+  sectionPath,
+  onResetSection,
+}: {
+  title: string;
+  sectionPath: string;
+  onResetSection: (path: string) => void;
+}) {
+  const localize = useLocalize();
+  const triggerReset = () => {
+    const message = localize('com_config_section_reset_confirm', { section: title });
+    if (typeof window !== 'undefined' && !window.confirm(message)) return;
+    onResetSection(sectionPath);
+  };
+  return (
+    <span className="flex w-full items-center justify-between gap-2">
+      <span>{title}</span>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          triggerReset();
+        }}
+        onKeyDown={(e) => {
+          if (e.key !== 'Enter' && e.key !== ' ') return;
+          e.preventDefault();
+          e.stopPropagation();
+          triggerReset();
+        }}
+        aria-label={localize('com_a11y_reset_section', { name: title })}
+        className="inline-flex items-center gap-0.5 rounded text-[11px] text-(--cui-color-text-muted) transition-colors hover:text-(--cui-color-text-danger) focus-visible:outline focus-visible:outline-2 focus-visible:outline-(--cui-color-outline)"
+      >
+        <Icon name="refresh" size="sm" />
+        <span>{localize('com_config_reset_section')}</span>
+      </button>
+    </span>
+  );
 }

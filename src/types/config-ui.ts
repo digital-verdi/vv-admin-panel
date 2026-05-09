@@ -68,6 +68,7 @@ export interface ConfigTabContentProps {
   editedValues: FlatConfigMap;
   onFieldChange: (path: string, value: ConfigValue) => void;
   onResetField?: (path: string) => void;
+  onResetSection?: (sectionPath: string) => void;
   profileMap?: Record<string, string[]>;
   previewMode?: boolean;
   previewScope?: ConfigScope;
@@ -131,6 +132,15 @@ export interface ConfigSectionProps {
   defaultExpanded?: boolean;
   inline?: boolean;
   showConfiguredOnly?: boolean;
+  /**
+   * Path of this section within the schema (e.g. `modelSpecs`,
+   * `endpoints.azureOpenAI`). When provided alongside `onResetSection` and at
+   * least one configured override under it, the header renders a "Reset
+   * section" affordance that atomically clears all overrides under the path.
+   */
+  sectionPath?: string;
+  onResetSection?: (sectionPath: string) => void;
+  hasOverrides?: boolean;
 }
 
 export interface ConfirmSaveDialogProps {

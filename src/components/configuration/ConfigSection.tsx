@@ -1,6 +1,6 @@
 import { Icon } from '@clickhouse/click-ui';
 import { useState, useCallback, useEffect, useRef } from 'react';
-import type { ReactNode } from 'react';
+import type { ReactNode, MouseEvent, KeyboardEvent } from 'react';
 import type * as t from '@/types';
 import { useLocalize } from '@/hooks';
 import { cn } from '@/utils';
@@ -34,6 +34,9 @@ export function ConfigSection({
   defaultExpanded,
   inline,
   showConfiguredOnly,
+  sectionPath,
+  onResetSection,
+  hasOverrides,
 }: t.ConfigSectionProps) {
   const localize = useLocalize();
   const [isExpanded, setIsExpanded] = useState(() => defaultExpanded ?? configuredCount > 0);
@@ -63,9 +66,21 @@ export function ConfigSection({
     };
   }, []);
 
+  const handleResetClick = useCallback(
+    (e: MouseEvent | KeyboardEvent) => {
+      e.stopPropagation();
+      if (!sectionPath || !onResetSection) return;
+      const message = localize('com_config_section_reset_confirm', { section: title });
+      if (typeof window !== 'undefined' && !window.confirm(message)) return;
+      onResetSection(sectionPath);
+    },
+    [sectionPath, onResetSection, localize, title],
+  );
+
   if (hidden) return null;
 
   const hasConfigured = configuredCount > 0;
+  const showResetSection = !!(sectionPath && onResetSection && hasOverrides);
 
   if (inline) {
     return (
@@ -76,7 +91,14 @@ export function ConfigSection({
       >
         <div className="config-row flex w-full items-center gap-6 rounded-md px-2.5 py-3">
           <div className="flex w-[20%] max-w-75 min-w-0 shrink-0 flex-col gap-1 pl-2.5">
-            <span className="text-sm font-semibold text-(--cui-color-text-default)">{title}</span>
+            <span className="flex items-center gap-2">
+              <span className="text-sm font-semibold text-(--cui-color-text-default)">
+                {title}
+              </span>
+              {showResetSection && (
+                <ResetSectionButton onClick={handleResetClick} title={title} />
+              )}
+            </span>
             {description && (
               <span className="text-xs text-(--cui-color-text-muted)">{description}</span>
             )}
@@ -123,6 +145,9 @@ export function ConfigSection({
                 {configuredCount}/{totalCount}
               </span>
             )}
+            {showResetSection && (
+              <ResetSectionButton onClick={handleResetClick} title={title} />
+            )}
           </span>
           {description && (
             <span className="text-xs text-(--cui-color-text-muted)">
@@ -148,5 +173,32 @@ export function ConfigSection({
       {renderCollapsible(isExpanded, hasEverExpanded, children)}
       <hr className="border-(--cui-color-stroke-default)" />
     </section>
+  );
+}
+
+function ResetSectionButton({
+  onClick,
+  title,
+}: {
+  onClick: (e: MouseEvent | KeyboardEvent) => void;
+  title: string;
+}) {
+  const localize = useLocalize();
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick(e);
+        }
+      }}
+      aria-label={localize('com_a11y_reset_section', { name: title })}
+      className="inline-flex items-center gap-0.5 rounded text-[11px] text-(--cui-color-text-muted) transition-colors hover:text-(--cui-color-text-danger) focus-visible:outline focus-visible:outline-2 focus-visible:outline-(--cui-color-outline)"
+    >
+      <Icon name="refresh" size="sm" />
+      <span>{localize('com_config_reset_section')}</span>
+    </button>
   );
 }

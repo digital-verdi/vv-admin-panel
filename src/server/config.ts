@@ -495,7 +495,8 @@ function anyOfSchema(candidates: t.ZodSchemaLike[]): t.ZodSchemaLike {
       error: best ?? { issues: [{ message: 'Validation failed', path: [] }] },
     };
   };
-  return { _def: { typeName: 'ZodUnion' }, safeParse } as t.ZodSchemaLike;
+  /** _def.options is preserved so resolveSubSchema can keep traversing into nested fields under union branches; without it, the next segment short-circuits and validateFieldValue silently passes everything. */
+  return { _def: { typeName: 'ZodUnion', options: candidates }, safeParse } as t.ZodSchemaLike;
 }
 
 /** Walks a Zod schema tree to find the sub-schema at a given dot-path.
@@ -530,10 +531,9 @@ export function resolveSubSchema(
       const options = unwrapped._def.options ?? [];
       const candidates: t.ZodSchemaLike[] = [];
       for (const opt of options) {
-        const optUnwrapped = unwrapSchema(opt);
-        if (optUnwrapped?.shape?.[segment]) {
-          candidates.push(optUnwrapped.shape[segment]);
-        }
+        /** Recurse so options that are records, arrays, or further unions resolve through their own walker case, not just shape lookup. */
+        const resolved = resolveSubSchema(opt, [segment]);
+        if (resolved) candidates.push(resolved);
       }
       if (candidates.length === 0) return null;
       if (candidates.length === 1) {

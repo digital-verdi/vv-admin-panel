@@ -123,6 +123,27 @@ function isPlainObject(value: t.ConfigValue): value is Record<string, t.ConfigVa
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/** New entry names are blocked from containing dots, but legacy data may still hold dotted server names; longest-prefix match against known keys keeps those edits attributed to the real entry instead of carving off the first segment. */
+function resolveEntryKey(
+  rest: string,
+  knownKeys: Iterable<string>,
+): { entryKey: string; segments: string[] } | null {
+  if (rest === '') return null;
+  let best: string | null = null;
+  for (const key of knownKeys) {
+    if (rest === key || rest.startsWith(`${key}.`)) {
+      if (best === null || key.length > best.length) best = key;
+    }
+  }
+  if (best !== null) {
+    const remainder = rest.length > best.length ? rest.slice(best.length + 1) : '';
+    return { entryKey: best, segments: remainder === '' ? [] : remainder.split('.') };
+  }
+  const dotIdx = rest.indexOf('.');
+  if (dotIdx === -1) return { entryKey: rest, segments: [] };
+  return { entryKey: rest.slice(0, dotIdx), segments: rest.slice(dotIdx + 1).split('.') };
+}
+
 function enumerateLeafPaths(
   obj: Record<string, t.ConfigValue>,
   prefix: string[] = [],
@@ -646,19 +667,18 @@ export function McpServersRenderer(props: t.FieldRendererProps) {
   const editsByEntry = useMemo(() => {
     const map = new Map<string, Array<{ segments: string[]; value: t.ConfigValue }>>();
     if (!editedValues) return map;
+    const knownKeys = Object.keys(baseRecord);
     for (const [editPath, value] of Object.entries(editedValues)) {
       if (!editPath.startsWith(entryPrefix)) continue;
       const rest = editPath.slice(entryPrefix.length);
-      const parts = rest.split('.');
-      const entryKey = parts[0];
-      if (!entryKey) continue;
-      const segments = parts.slice(1);
-      const list = map.get(entryKey) ?? [];
-      list.push({ segments, value });
-      map.set(entryKey, list);
+      const parsed = resolveEntryKey(rest, knownKeys);
+      if (!parsed) continue;
+      const list = map.get(parsed.entryKey) ?? [];
+      list.push({ segments: parsed.segments, value });
+      map.set(parsed.entryKey, list);
     }
     return map;
-  }, [editedValues, entryPrefix]);
+  }, [editedValues, entryPrefix, baseRecord]);
 
   const record = useMemo(() => {
     if (editsByEntry.size === 0) return baseRecord;

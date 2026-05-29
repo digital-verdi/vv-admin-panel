@@ -675,6 +675,38 @@ describe('validateFieldValue', () => {
       expect(result.error.length).toBeGreaterThan(0);
     }
   });
+
+  it('validates a nested field reached through a union (header value must be string)', () => {
+    expect(
+      validateFieldValue('mcpServers.foo.headers.Authorization', 'Bearer xyz'),
+    ).toEqual({ success: true });
+    const bad = validateFieldValue('mcpServers.foo.headers.Authorization', 42);
+    expect(bad.success).toBe(false);
+  });
+});
+
+/* ---------------------------------------------------------------------------
+ * Regression — resolveSubSchema must keep walking through synthetic unions.
+ * The anyOfSchema wrapper used to drop _def.options, so the second segment
+ * after a multi-candidate union could not be resolved and validateFieldValue
+ * silently passed everything under unioned objects.
+ * -----------------------------------------------------------------------*/
+
+describe('resolveSubSchema — traversal through synthesized union', () => {
+  it('walks into a nested field after a union with multiple candidates', () => {
+    const schema = z3.object({
+      payload: z3.union([
+        z3.object({ headers: z3.record(z3.string(), z3.string()) }),
+        z3.object({ headers: z3.record(z3.string(), z3.string()) }),
+      ]),
+    });
+    const sub = resolveSubSchema(schema, ['payload', 'headers', 'Authorization']);
+    expect(sub).not.toBeNull();
+    const safeParse = (sub as { safeParse?: (v: unknown) => { success: boolean } }).safeParse;
+    expect(typeof safeParse).toBe('function');
+    expect(safeParse!('Bearer xyz').success).toBe(true);
+    expect(safeParse!(42).success).toBe(false);
+  });
 });
 
 /* ---------------------------------------------------------------------------

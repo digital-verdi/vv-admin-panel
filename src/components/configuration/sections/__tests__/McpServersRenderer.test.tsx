@@ -366,6 +366,55 @@ describe('McpServersRenderer — rejects dotted server names', () => {
   });
 });
 
+describe('McpServersRenderer — legacy dotted entry keys', () => {
+  it('groups edits under the dotted base key instead of splitting on the first dot', () => {
+    const baseRecord = {
+      'legacy.dotted': { type: 'sse', url: 'https://old.example.com' },
+    };
+    const editedValues = { 'mcpServers.legacy.dotted.url': 'https://new.example.com' };
+    const { container } = renderRenderer({
+      baseRecord,
+      editedValues,
+      yamlBaseKeys: new Set<string>(),
+    });
+
+    const header = screen.queryByText('legacy.dotted');
+    expect(header).not.toBeNull();
+    fireEvent.click(header!);
+    const url = container.querySelector('input#legacy-dotted-url') as HTMLInputElement | null;
+    expect(url).not.toBeNull();
+    expect(url!.value).toBe('https://new.example.com');
+  });
+
+  it('clears the dotted base entry on remove, not a phantom shortened key', () => {
+    const onChange = vi.fn();
+    const baseRecord = {
+      'legacy.dotted': { type: 'sse', url: 'https://old.example.com' },
+    };
+    const { container } = renderRenderer({
+      baseRecord,
+      yamlBaseKeys: new Set<string>(),
+      onChange,
+    });
+
+    const trashBtn = container.querySelector(
+      'button[aria-label^="com_ui_delete"]',
+    ) as HTMLButtonElement | null;
+    expect(trashBtn).not.toBeNull();
+    fireEvent.click(trashBtn!);
+
+    const undefinedPaths = onChange.mock.calls.filter(([, v]) => v === undefined).map(([p]) => p);
+    expect(undefinedPaths).toEqual(
+      expect.arrayContaining([
+        'mcpServers.legacy.dotted',
+        'mcpServers.legacy.dotted.type',
+        'mcpServers.legacy.dotted.url',
+      ]),
+    );
+    expect(undefinedPaths).not.toContain('mcpServers.legacy');
+  });
+});
+
 describe('McpServersRenderer — handleRemove', () => {
   beforeEach(() => {
     vi.clearAllMocks();

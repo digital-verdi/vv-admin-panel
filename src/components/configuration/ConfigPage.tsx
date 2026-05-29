@@ -405,6 +405,13 @@ export function ConfigPage({ initialTab, highlightField, initialScope }: t.Confi
         if (match && !isContainerDelete) {
           const next = { ...prev };
           delete next[path];
+          /** Drop any orphaned ancestor `undefined` writes; a leaf returning to baseline means the user is re-asserting that subtree, so a stale "delete this whole entry" left over from a prior remove (e.g. delete-then-recreate-at-baseline) must not survive to hide the resurrected entry. */
+          for (const existing of Object.keys(next)) {
+            if (existing === path) continue;
+            if (path.startsWith(`${existing}.`) && next[existing] === undefined) {
+              delete next[existing];
+            }
+          }
           return next;
         }
         const next = { ...prev, [path]: value };

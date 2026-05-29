@@ -683,36 +683,44 @@ export function McpServersRenderer(props: t.FieldRendererProps) {
   const record = useMemo(() => {
     if (editsByEntry.size === 0) return baseRecord;
     const result: Record<string, t.ConfigValue> = {};
-    for (const [k, v] of Object.entries(baseRecord)) {
-      if (!editsByEntry.has(k)) {
-        result[k] = v;
-      }
-    }
-    for (const [entryKey, leafEdits] of editsByEntry) {
+    /** Resolves a single entry's overlay value or `undefined` when the entry should drop out (whole-entry delete with no resurrecting writes). */
+    const resolveEntryValue = (
+      entryKey: string,
+      leafEdits: Array<{ segments: string[]; value: t.ConfigValue }>,
+    ): t.ConfigValue | undefined => {
       const wholeEntryWrites = leafEdits.filter((e) => e.segments.length === 0);
       const leafWrites = leafEdits.filter((e) => e.segments.length > 0);
-
       let current: t.ConfigValue | undefined;
       if (wholeEntryWrites.length > 0) {
         const last = wholeEntryWrites[wholeEntryWrites.length - 1];
-        if (last.value === undefined) {
-          continue;
-        }
+        if (last.value === undefined) return undefined;
         current = last.value;
       } else if (entryKey in baseRecord) {
         current = baseRecord[entryKey];
       }
-
-      if (leafWrites.length === 0) {
-        if (current !== undefined) result[entryKey] = current;
-        continue;
-      }
+      if (leafWrites.length === 0) return current;
       const existingObj = isPlainObject(current) ? current : {};
-      const overlay = applyLeafOverlay(
+      return applyLeafOverlay(
         existingObj,
         leafWrites.map((e) => [e.segments, e.value] as [string[], t.ConfigValue]),
       );
-      result[entryKey] = overlay;
+    };
+
+    /** Walk baseRecord first so edited entries keep their original position in the list instead of jumping to the bottom. */
+    for (const [k, v] of Object.entries(baseRecord)) {
+      const leafEdits = editsByEntry.get(k);
+      if (!leafEdits) {
+        result[k] = v;
+        continue;
+      }
+      const resolved = resolveEntryValue(k, leafEdits);
+      if (resolved !== undefined) result[k] = resolved;
+    }
+    /** Newly-created entries appear in editsByEntry insertion order at the bottom. */
+    for (const [entryKey, leafEdits] of editsByEntry) {
+      if (entryKey in baseRecord) continue;
+      const resolved = resolveEntryValue(entryKey, leafEdits);
+      if (resolved !== undefined) result[entryKey] = resolved;
     }
     return result;
   }, [baseRecord, editsByEntry]);

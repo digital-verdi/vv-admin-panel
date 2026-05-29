@@ -366,6 +366,50 @@ describe('McpServersRenderer — rejects dotted server names', () => {
   });
 });
 
+describe('McpServersRenderer — entry order', () => {
+  it('keeps an edited entry in its original position instead of moving it to the bottom', () => {
+    const baseRecord = {
+      alpha: { type: 'sse', url: 'https://a.example.com' },
+      beta: { type: 'sse', url: 'https://b.example.com' },
+      gamma: { type: 'sse', url: 'https://c.example.com' },
+    };
+    const editedValues = { 'mcpServers.alpha.url': 'https://a-new.example.com' };
+    const { container } = renderRenderer({
+      baseRecord,
+      editedValues,
+      yamlBaseKeys: new Set<string>(),
+    });
+
+    const headers = container.querySelectorAll('[data-section-id^="section-mcpServers-"]');
+    const renderedKeys = Array.from(headers).map((h) =>
+      decodeURIComponent((h.getAttribute('data-section-id') ?? '').replace(/^section-mcpServers-/, '')),
+    );
+    expect(renderedKeys).toEqual(['alpha', 'beta', 'gamma']);
+  });
+
+  it('appends a freshly-created entry at the bottom', () => {
+    const baseRecord = {
+      alpha: { type: 'sse', url: 'https://a.example.com' },
+      beta: { type: 'sse', url: 'https://b.example.com' },
+    };
+    const editedValues = {
+      'mcpServers.brandNew.type': 'sse',
+      'mcpServers.brandNew.url': 'https://new.example.com',
+    };
+    const { container } = renderRenderer({
+      baseRecord,
+      editedValues,
+      yamlBaseKeys: new Set<string>(),
+    });
+
+    const headers = container.querySelectorAll('[data-section-id^="section-mcpServers-"]');
+    const renderedKeys = Array.from(headers).map((h) =>
+      decodeURIComponent((h.getAttribute('data-section-id') ?? '').replace(/^section-mcpServers-/, '')),
+    );
+    expect(renderedKeys).toEqual(['alpha', 'beta', 'brandNew']);
+  });
+});
+
 describe('McpServersRenderer — legacy dotted entry keys', () => {
   it('groups edits under the dotted base key instead of splitting on the first dot', () => {
     const baseRecord = {

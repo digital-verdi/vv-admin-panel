@@ -365,6 +365,24 @@ export function ConfigPage({ initialTab, highlightField, initialScope }: t.Confi
     return set;
   }, [scopeBaseline]);
 
+  /** Container paths walked directly off the structured config, so an orphaned `{}` entry whose flatten dropped (or never produced) any leaf is still recognized as a real subtree-delete target. */
+  const baselineContainerPaths = useMemo(() => {
+    const set = new Set<string>();
+    const walk = (obj: unknown, prefix: string): void => {
+      if (obj == null || typeof obj !== 'object' || Array.isArray(obj)) return;
+      for (const k of Object.keys(obj as Record<string, unknown>)) {
+        const path = prefix ? `${prefix}.${k}` : k;
+        const v = (obj as Record<string, unknown>)[k];
+        if (v !== null && typeof v === 'object' && !Array.isArray(v)) {
+          set.add(path);
+          walk(v, path);
+        }
+      }
+    };
+    walk(baseActiveConfigValues, '');
+    return set;
+  }, [baseActiveConfigValues]);
+
   const handleFieldChange = useCallback(
     (path: string, value: t.ConfigValue) => {
       setTouchedPaths((prev) => {
@@ -380,8 +398,10 @@ export function ConfigPage({ initialTab, highlightField, initialScope }: t.Confi
           (typeof value === 'object' &&
             typeof baseline === 'object' &&
             JSON.stringify(value) === JSON.stringify(baseline));
-        /** A container-path undefined write must survive; baseline only stores leaves, so it would otherwise match `undefined === undefined` and get pruned. */
-        const isContainerDelete = value === undefined && baselineIntermediates.has(path);
+        /** A container-path undefined write must survive; baseline only stores leaves, so it would otherwise match `undefined === undefined` and get pruned. baselineContainerPaths catches the orphaned empty-object case where leaf-derived intermediates miss the entry. */
+        const isContainerDelete =
+          value === undefined &&
+          (baselineIntermediates.has(path) || baselineContainerPaths.has(path));
         if (match && !isContainerDelete) {
           const next = { ...prev };
           delete next[path];
@@ -405,7 +425,7 @@ export function ConfigPage({ initialTab, highlightField, initialScope }: t.Confi
         return next;
       });
     },
-    [scopeBaseline, baselineIntermediates],
+    [scopeBaseline, baselineIntermediates, baselineContainerPaths],
   );
 
   const isDirty = Object.keys(editedValues).length > 0;

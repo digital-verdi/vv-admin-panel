@@ -794,14 +794,13 @@ export function McpServersRenderer(props: t.FieldRendererProps) {
         onValidationErrorRef.current?.(localizeRef.current('com_config_server_name_invalid'));
         return;
       }
+      /** Empty arrays are valid Zod values for required array fields (e.g. stdio `args: []`); skipping them here would drop the per-leaf write and leave the entry incomplete, failing the cross-field check at save time. Only undefined / null / empty string get filtered, matching what the dialog draft-trim already does. */
       for (const [fieldKey, fieldValue] of Object.entries(entry)) {
         if (fieldValue === undefined || fieldValue === null) continue;
         if (fieldValue === '') continue;
-        if (Array.isArray(fieldValue) && fieldValue.length === 0) continue;
         if (isPlainObject(fieldValue)) {
           for (const { segments, value } of enumerateLeafPaths(fieldValue, [fieldKey])) {
             if (value === undefined || value === null || value === '') continue;
-            if (Array.isArray(value) && value.length === 0) continue;
             onChange(`${path}.${serverName}.${segments.join('.')}`, value);
           }
         } else {

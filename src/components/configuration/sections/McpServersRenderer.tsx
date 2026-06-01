@@ -41,6 +41,12 @@ const TRANSPORT_TYPE_OPTIONS: { label: string; value: string }[] = [
 
 const ALWAYS_REQUIRED = new Set(['type']);
 
+/** Stable empty record used as the fallback for `baseRecord`/`parentValue` when no data is available, so the downstream `useMemo` chain on `editsByEntry`/`record` does not re-fire on every render with a fresh `{}` literal. */
+const EMPTY_RECORD: Record<string, t.ConfigValue> = Object.freeze({}) as Record<
+  string,
+  t.ConfigValue
+>;
+
 /**
  * YAML configs can omit `type` because each transport schema (except
  * streamable-http) defaults from the discriminating fields. Mirror the
@@ -664,8 +670,8 @@ export function McpServersRenderer(props: t.FieldRendererProps) {
 
   const path = parentPath;
   const entryPrefix = `${path}.`;
-  const baseValue = getValue(path, parentValue ?? {});
-  const baseRecord: Record<string, t.ConfigValue> = isPlainObject(baseValue) ? baseValue : {};
+  const baseValue = getValue(path, parentValue ?? EMPTY_RECORD);
+  const baseRecord: Record<string, t.ConfigValue> = isPlainObject(baseValue) ? baseValue : EMPTY_RECORD;
 
   const editsByEntry = useMemo(() => {
     const map = new Map<string, Array<{ segments: string[]; value: t.ConfigValue }>>();
@@ -930,7 +936,7 @@ export function McpServersRenderer(props: t.FieldRendererProps) {
           onChange={onChange}
           onRemove={handleRemove}
           onRename={handleRename}
-          justAddedKey={justAddedKey}
+          justAdded={key === justAddedKey}
         />
       ))}
       {entries.length === 0 && (
@@ -968,7 +974,7 @@ const McpEntryRow = memo(function McpEntryRowImpl({
   onChange,
   onRemove,
   onRename,
-  justAddedKey,
+  justAdded,
 }: {
   entryKey: string;
   entryValue: t.ConfigValue;
@@ -979,7 +985,7 @@ const McpEntryRow = memo(function McpEntryRowImpl({
   onChange: (path: string, value: t.ConfigValue) => void;
   onRemove: (key: string) => void;
   onRename: (oldKey: string, newKey: string) => void;
-  justAddedKey: string | null;
+  justAdded: boolean;
 }) {
   const entryObj = isPlainObject(entryValue) ? entryValue : {};
   const rawType = typeof entryObj.type === 'string' ? entryObj.type : '';
@@ -1037,7 +1043,7 @@ const McpEntryRow = memo(function McpEntryRowImpl({
       onRemove={isReadOnly || isLockedIdentity ? undefined : () => onRemove(entryKey)}
       onRename={isReadOnly || isLockedIdentity ? undefined : (renamed) => onRename(entryKey, renamed)}
       disabled={isReadOnly}
-      defaultExpanded={entryKey === justAddedKey}
+      defaultExpanded={justAdded}
       renderFields={renderEntryFields}
     />
   );

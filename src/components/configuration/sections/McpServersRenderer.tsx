@@ -687,26 +687,37 @@ export function McpServersRenderer(props: t.FieldRendererProps) {
   const record = useMemo(() => {
     if (editsByEntry.size === 0) return baseRecord;
     const result: Record<string, t.ConfigValue> = {};
-    /** Resolves a single entry's overlay value or `undefined` when the entry should drop out (whole-entry delete with no resurrecting writes). */
+    /** Resolves a single entry's overlay value or `undefined` when the entry should drop out. Iterates edits in insertion order so a whole-entry delete followed by recreating per-leaf writes shows the new entry, not the deleted one. The seed is the most recent whole-entry write (`undefined` becomes an empty object so subsequent leaves attach to it); without a whole-entry write the seed is the baseRecord entry. */
     const resolveEntryValue = (
       entryKey: string,
       leafEdits: Array<{ segments: string[]; value: t.ConfigValue }>,
     ): t.ConfigValue | undefined => {
-      const wholeEntryWrites = leafEdits.filter((e) => e.segments.length === 0);
-      const leafWrites = leafEdits.filter((e) => e.segments.length > 0);
-      let current: t.ConfigValue | undefined;
-      if (wholeEntryWrites.length > 0) {
-        const last = wholeEntryWrites[wholeEntryWrites.length - 1];
-        if (last.value === undefined) return undefined;
-        current = last.value;
-      } else if (entryKey in baseRecord) {
-        current = baseRecord[entryKey];
+      let seed: t.ConfigValue | undefined = baseRecord[entryKey];
+      let seedFromDelete = false;
+      let seedIndex = -1;
+      for (let i = 0; i < leafEdits.length; i++) {
+        const edit = leafEdits[i];
+        if (edit.segments.length === 0) {
+          if (edit.value === undefined) {
+            seed = {};
+            seedFromDelete = true;
+          } else {
+            seed = edit.value;
+            seedFromDelete = false;
+          }
+          seedIndex = i;
+        }
       }
-      if (leafWrites.length === 0) return current;
-      const existingObj = isPlainObject(current) ? current : {};
+      const subsequentLeaves = leafEdits
+        .slice(seedIndex + 1)
+        .filter((e) => e.segments.length > 0);
+      if (subsequentLeaves.length === 0) {
+        return seedFromDelete ? undefined : seed;
+      }
+      const existingObj = isPlainObject(seed) ? seed : {};
       return applyLeafOverlay(
         existingObj,
-        leafWrites.map((e) => [e.segments, e.value] as [string[], t.ConfigValue]),
+        subsequentLeaves.map((e) => [e.segments, e.value] as [string[], t.ConfigValue]),
       );
     };
 
@@ -1041,29 +1052,6 @@ const McpEntryRow = memo(function McpEntryRowImpl({
   );
 });
 
-/** Returns the entry key + field-path within it, or null if the path is not under mcpServers. */
-function splitMcpEntryPath(
-  fullPath: string,
-  knownEntryKeys: Iterable<string>,
-): { entryKey: string; field: string } | null {
-  if (!fullPath.startsWith('mcpServers.')) return null;
-  const rest = fullPath.slice('mcpServers.'.length);
-  if (rest === '') return null;
-  let best: string | null = null;
-  for (const key of knownEntryKeys) {
-    if (rest === key || rest.startsWith(`${key}.`)) {
-      if (best === null || key.length > best.length) best = key;
-    }
-  }
-  if (best !== null) {
-    const field = rest.length > best.length ? rest.slice(best.length + 1) : '';
-    return { entryKey: best, field };
-  }
-  const dotIdx = rest.indexOf('.');
-  if (dotIdx === -1) return { entryKey: rest, field: '' };
-  return { entryKey: rest.slice(0, dotIdx), field: rest.slice(dotIdx + 1) };
-}
-
 function lookupLeaf(
   obj: unknown,
   segments: string[],
@@ -1091,11 +1079,12 @@ function mergeMcpEdits(
   const upsertEntries: Record<string, Record<string, t.ConfigValue>> = {};
 
   for (const [path, value] of edits) {
-    const split = splitMcpEntryPath(path, knownKeys);
-    if (!split) continue;
-    const { entryKey, field } = split;
+    if (!path.startsWith('mcpServers.')) continue;
+    const parsed = resolveEntryKey(path.slice('mcpServers.'.length), knownKeys);
+    if (!parsed) continue;
+    const { entryKey, segments } = parsed;
     knownKeys.add(entryKey);
-    if (field === '') {
+    if (segments.length === 0) {
       if (value === undefined) {
         const fallback = resetFallback?.[entryKey];
         if (isPlainObject(fallback)) {
@@ -1120,7 +1109,6 @@ function mergeMcpEdits(
       const seed = baseEntries[entryKey];
       upsertEntries[entryKey] = seed ? deepClone(seed) : {};
     }
-    const segments = field.split('.');
     if (value === undefined && resetFallback) {
       const inherited = lookupLeaf(resetFallback[entryKey], segments);
       setLeaf(upsertEntries[entryKey], segments, inherited as t.ConfigValue);
@@ -1152,8 +1140,12 @@ export function validateMcpCrossField(
   const knownKeys = new Set(Object.keys(baseline));
   const affected = new Set<string>();
   for (const [path] of edits) {
-    const split = splitMcpEntryPath(path, knownKeys);
-    if (split) affected.add(split.entryKey);
+    if (!path.startsWith('mcpServers.')) continue;
+    const parsed = resolveEntryKey(path.slice('mcpServers.'.length), knownKeys);
+    if (parsed) {
+      knownKeys.add(parsed.entryKey);
+      affected.add(parsed.entryKey);
+    }
   }
   const errors: Array<{ entryKey: string; missingField: string }> = [];
   for (const entryKey of affected) {

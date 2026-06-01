@@ -809,6 +809,41 @@ describe('McpServersRenderer — record overlay', () => {
     expect(urlInput).not.toBeNull();
     expect(urlInput!.value).toBe('https://overlay.example.com');
   });
+
+  it('shows the recreated entry when editedValues holds both a whole-entry delete and subsequent leaf writes', () => {
+    const baseRecord = {
+      kapa: { type: 'sse', url: 'https://old.example.com' },
+    };
+    /** Order matters: the delete write must come before the recreate leaves so resolveEntryValue treats it as delete-then-recreate, not recreate-then-delete. */
+    const editedValues = {
+      'mcpServers.kapa': undefined,
+      'mcpServers.kapa.type': 'sse',
+      'mcpServers.kapa.url': 'https://new.example.com',
+    };
+    const { container } = renderRenderer({
+      baseRecord,
+      editedValues,
+      yamlBaseKeys: new Set<string>(),
+    });
+    expect(screen.getByText('kapa')).toBeTruthy();
+    fireEvent.click(screen.getByText('kapa'));
+    const urlInput = container.querySelector('input#kapa-url') as HTMLInputElement | null;
+    expect(urlInput).not.toBeNull();
+    expect(urlInput!.value).toBe('https://new.example.com');
+  });
+
+  it('hides the entry when the last whole-entry write is a delete with no subsequent leaf writes', () => {
+    const baseRecord = {
+      kapa: { type: 'sse', url: 'https://old.example.com' },
+    };
+    const editedValues = { 'mcpServers.kapa': undefined };
+    renderRenderer({
+      baseRecord,
+      editedValues,
+      yamlBaseKeys: new Set<string>(),
+    });
+    expect(screen.queryByText('kapa')).toBeNull();
+  });
 });
 
 describe('McpServersRenderer — handleCreate per-leaf writes', () => {

@@ -841,6 +841,7 @@ export const getBaseConfigFn = createServerFn({ method: 'GET' }).handler(async (
   }
 
   let yamlMcpKeys: string[] | undefined;
+  let yamlMcpServers: Record<string, t.ConfigValue> | undefined;
   if (baseOnlyResponse.ok) {
     const { config: baseOnlyRaw } = (await baseOnlyResponse.json()) as {
       config: Record<string, t.ConfigValue>;
@@ -849,11 +850,19 @@ export const getBaseConfigFn = createServerFn({ method: 'GET' }).handler(async (
     const mcp = baseOnly.mcpServers;
     if (mcp && typeof mcp === 'object' && !Array.isArray(mcp)) {
       /** Trust the baseOnly response when it has a valid mcpServers shape. The previous byte-equality fallback against `config.mcpServers` was a defensive heuristic for hypothetical legacy backends that ignore `?baseOnly`, but it false-negatived whenever an admin override happened to be a no-op (e.g. an admin set `title` to a value that already matched YAML), causing the YAML lock affordances to disappear for entries that should stay locked. The deployed LibreChat supports `?baseOnly` directly, so the heuristic is no longer earning its keep. */
-      yamlMcpKeys = Object.keys(mcp as Record<string, t.ConfigValue>);
+      yamlMcpServers = mcp as Record<string, t.ConfigValue>;
+      yamlMcpKeys = Object.keys(yamlMcpServers);
     }
   }
 
-  return { config, dbOverrides, configuredFromBase, schemaDefaults: flatDefaults, yamlMcpKeys };
+  return {
+    config,
+    dbOverrides,
+    configuredFromBase,
+    schemaDefaults: flatDefaults,
+    yamlMcpKeys,
+    yamlMcpServers,
+  };
 });
 
 export const baseConfigOptions = queryOptions({

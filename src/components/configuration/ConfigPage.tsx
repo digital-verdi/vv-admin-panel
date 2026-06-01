@@ -521,12 +521,11 @@ export function ConfigPage({ initialTab, highlightField, initialScope }: t.Confi
     const mcpEdits: Array<[string, t.ConfigValue]> = touched
       .filter((p) => p.startsWith('mcpServers.'))
       .map((p) => [p, editedValues[p]] as [string, t.ConfigValue]);
-    /** In scope mode, a leaf reset (undefined write) only removes the scope override and reveals the inherited base value, so feed configValues as the resetFallback. In base mode there is nothing to inherit from. */
+    /** A leaf reset (undefined write) removes the override and reveals the value of the next-lower layer. In scope mode that next layer is the base config; in base mode it is the un-merged YAML config (the baseOnly response). Feed whichever layer applies as the resetFallback so the cross-field validator does not falsely flag a reset-but-still-valid field as missing. */
     const mcpResetFallback = (() => {
-      if (!isEditingScope) return undefined;
-      const v = configValues?.mcpServers;
-      if (v && typeof v === 'object' && !Array.isArray(v)) {
-        return v as Record<string, t.ConfigValue>;
+      const source = isEditingScope ? configValues?.mcpServers : baseConfigData?.yamlMcpServers;
+      if (source && typeof source === 'object' && !Array.isArray(source)) {
+        return source as Record<string, t.ConfigValue>;
       }
       return undefined;
     })();
@@ -612,6 +611,7 @@ export function ConfigPage({ initialTab, highlightField, initialScope }: t.Confi
     saving,
     baseActiveConfigValues,
     configValues,
+    baseConfigData,
     localize,
   ]);
 

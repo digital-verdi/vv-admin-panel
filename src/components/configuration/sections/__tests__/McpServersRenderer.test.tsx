@@ -443,6 +443,22 @@ describe('validateMcpCrossField', () => {
     expect(errors[0].missingField).toBe('url');
   });
 
+  it('treats a base-mode leaf reset on a YAML-defined entry as revealing the YAML value when the YAML map is supplied as resetFallback', () => {
+    /** In base mode the admin panel writes to the base config override doc; a DELETE on a field path reveals the underlying YAML value. With the YAML map fed in as resetFallback the validator should see the inherited value and not flag the field as missing. */
+    const baseline = {
+      kapa: { type: 'stdio', command: 'node-overridden', args: ['index.js'] },
+    };
+    const yamlFallback = {
+      kapa: { type: 'stdio', command: 'node', args: ['index.js'] },
+    };
+    const errors = validateMcpCrossField(
+      baseline,
+      [['mcpServers.kapa.command', undefined]],
+      yamlFallback,
+    );
+    expect(errors).toEqual([]);
+  });
+
   it('accepts an empty array for stdio args (the Zod schema requires presence but allows []) without flagging it as missing', () => {
     const baseline = {
       foo: { type: 'stdio', command: 'node', args: ['index.js'] },

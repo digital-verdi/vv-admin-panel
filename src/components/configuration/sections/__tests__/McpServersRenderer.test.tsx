@@ -490,10 +490,10 @@ describe('McpServersRenderer — scope mode', () => {
     expect(urlCalls.length).toBeGreaterThan(0);
   });
 
-  it('writes null at entry-path on delete in scope mode (tombstone, not undefined)', () => {
+  it('writes undefined at entry-path on delete in scope mode (the existing DELETE field-path cleanly $unsets a scope-tier entry)', () => {
     const onChange = vi.fn();
     const baseRecord = {
-      inherited: { type: 'sse', url: 'https://base.example.com' },
+      adminOnly: { type: 'sse', url: 'https://admin.example.com' },
     };
     const { container } = renderRenderer({
       baseRecord,
@@ -506,15 +506,15 @@ describe('McpServersRenderer — scope mode', () => {
     expect(deleteBtn).not.toBeNull();
     fireEvent.click(deleteBtn!);
 
-    const entryWrite = onChange.mock.calls.find(([p]) => p === 'mcpServers.inherited');
+    const entryWrite = onChange.mock.calls.find(([p]) => p === 'mcpServers.adminOnly');
     expect(entryWrite).toBeDefined();
-    expect(entryWrite![1]).toBeNull();
+    expect(entryWrite![1]).toBeUndefined();
   });
 
-  it('writes null at old entry-path on rename in scope mode', () => {
+  it('writes undefined at old entry-path on rename in scope mode', () => {
     const onChange = vi.fn();
     const baseRecord = {
-      inherited: { type: 'sse', url: 'https://base.example.com' },
+      adminOnly: { type: 'sse', url: 'https://admin.example.com' },
     };
     const { container } = renderRenderer({
       baseRecord,
@@ -522,7 +522,7 @@ describe('McpServersRenderer — scope mode', () => {
       scopeMode: true,
       onChange,
     });
-    fireEvent.click(screen.getByText('inherited'));
+    fireEvent.click(screen.getByText('adminOnly'));
     const pencil = container.querySelector(
       'button[aria-label^="com_a11y_rename_entry"]',
     ) as HTMLButtonElement | null;
@@ -535,49 +535,13 @@ describe('McpServersRenderer — scope mode', () => {
     fireEvent.change(renameInput!, { target: { value: 'renamed' } });
     fireEvent.blur(renameInput!);
 
-    const oldEntryWrite = onChange.mock.calls.find(([p]) => p === 'mcpServers.inherited');
+    const oldEntryWrite = onChange.mock.calls.find(([p]) => p === 'mcpServers.adminOnly');
     expect(oldEntryWrite).toBeDefined();
-    expect(oldEntryWrite![1]).toBeNull();
+    expect(oldEntryWrite![1]).toBeUndefined();
     const newLeafWrite = onChange.mock.calls.find(
-      ([p, v]) => p === 'mcpServers.renamed.url' && v === 'https://base.example.com',
+      ([p, v]) => p === 'mcpServers.renamed.url' && v === 'https://admin.example.com',
     );
     expect(newLeafWrite).toBeDefined();
-  });
-
-  it('hides an entry from the rendered list when editedValues holds a null tombstone at its entry path', () => {
-    const baseRecord = {
-      inherited: { type: 'sse', url: 'https://base.example.com' },
-      other: { type: 'sse', url: 'https://other.example.com' },
-    };
-    const editedValues = { 'mcpServers.inherited': null as unknown as t.ConfigValue };
-    renderRenderer({
-      baseRecord,
-      editedValues,
-      yamlBaseKeys: new Set<string>(),
-      scopeMode: true,
-    });
-    expect(screen.queryByText('inherited')).toBeNull();
-    expect(screen.getByText('other')).toBeTruthy();
-  });
-
-  it('writes undefined (not null) at entry-path on delete in base mode', () => {
-    const onChange = vi.fn();
-    const baseRecord = {
-      adminOnly: { type: 'sse', url: 'https://admin.example.com' },
-    };
-    const { container } = renderRenderer({
-      baseRecord,
-      yamlBaseKeys: new Set<string>(),
-      onChange,
-    });
-
-    const deleteBtn = container.querySelector('button[aria-label^="com_ui_delete"]') as HTMLButtonElement | null;
-    expect(deleteBtn).not.toBeNull();
-    fireEvent.click(deleteBtn!);
-
-    const entryWrite = onChange.mock.calls.find(([p]) => p === 'mcpServers.adminOnly');
-    expect(entryWrite).toBeDefined();
-    expect(entryWrite![1]).toBeUndefined();
   });
 });
 

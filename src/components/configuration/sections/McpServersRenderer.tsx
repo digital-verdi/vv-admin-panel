@@ -657,7 +657,6 @@ export function McpServersRenderer(props: t.FieldRendererProps) {
     editedValues,
     yamlBaseKeys,
     onValidationError,
-    scopeMode,
   } = props;
   const localize = useLocalize();
   const [createOpen, setCreateOpen] = useState(false);
@@ -698,8 +697,7 @@ export function McpServersRenderer(props: t.FieldRendererProps) {
       for (let i = 0; i < leafEdits.length; i++) {
         const edit = leafEdits[i];
         if (edit.segments.length === 0) {
-          /** `null` is the scope-mode tombstone shape; semantically equivalent to a delete from the view perspective. */
-          if (edit.value === undefined || edit.value === null) {
+          if (edit.value === undefined) {
             seed = {};
             seedFromDelete = true;
           } else {
@@ -781,11 +779,6 @@ export function McpServersRenderer(props: t.FieldRendererProps) {
     localizeRef.current = localize;
   }, [localize]);
 
-  const scopeModeRef = useRef(scopeMode);
-  useEffect(() => {
-    scopeModeRef.current = scopeMode;
-  }, [scopeMode]);
-
   const handleCreate = useCallback(
     (serverName: string, entry: Record<string, t.ConfigValue>) => {
       if (serverName.includes('.')) {
@@ -843,9 +836,9 @@ export function McpServersRenderer(props: t.FieldRendererProps) {
           if (!seen.has(leafPath)) onChange(leafPath, undefined);
         }
       }
-      /** In scope mode write `null` instead of `undefined`: undefined routes through the DELETE-field-path endpoint and silently no-ops for inherited entries that have no scope override, whereas `null` PATCHes a tombstone the merge layer recognizes as "hide this entry for this scope." Base mode keeps `undefined` so MongoDB's $unset can collapse the subtree. */
+      /** Entry-path delete is needed to make MongoDB's $unset collapse the subtree; per-leaf $unset alone leaves an empty parent that refetches as a phantom entry. */
       if (!seen.has(entryPath)) {
-        onChange(entryPath, scopeModeRef.current ? null : undefined);
+        onChange(entryPath, undefined);
       }
     },
     [onChange, path],
@@ -906,8 +899,8 @@ export function McpServersRenderer(props: t.FieldRendererProps) {
         }
         onChange(`${oldPrefix}${segments.join('.')}`, undefined);
       }
-      /** See tombstone note in handleRemove for why scope mode writes null instead of undefined. */
-      onChange(`${path}.${oldKey}`, scopeModeRef.current ? null : undefined);
+      /** See $unset note in handleRemove. */
+      onChange(`${path}.${oldKey}`, undefined);
     },
     [onChange, path],
   );

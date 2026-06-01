@@ -894,9 +894,8 @@ export function McpServersRenderer(props: t.FieldRendererProps) {
 
       for (const segKey of allSegKeys) {
         const segments = segKey.split('.');
-        const leafValue = overlayBySeg.get(segKey);
-        if (leafValue !== undefined) {
-          onChange(`${newPrefix}${segments.join('.')}`, leafValue);
+        if (overlayBySeg.has(segKey)) {
+          onChange(`${newPrefix}${segments.join('.')}`, overlayBySeg.get(segKey));
         }
         onChange(`${oldPrefix}${segments.join('.')}`, undefined);
       }
@@ -1088,7 +1087,7 @@ function lookupLeaf(
 }
 
 /** Merges leaf edits onto the baseline MCP entries (omitting deleted entries) so callers can validate the post-save state. `resetFallback`, when provided, supplies the value that an `undefined` leaf write would reveal after the actual save (e.g. in scope mode, a leaf reset removes the scope override and exposes the inherited base value). */
-export function mergeMcpEdits(
+function mergeMcpEdits(
   baseline: Record<string, t.ConfigValue>,
   edits: Array<[string, t.ConfigValue]>,
   resetFallback?: Record<string, t.ConfigValue>,
@@ -1127,7 +1126,9 @@ export function mergeMcpEdits(
       deletedEntries.delete(entryKey);
     }
     if (!upsertEntries[entryKey]) {
-      upsertEntries[entryKey] = baseEntries[entryKey] ?? {};
+      /** Clone on promote so subsequent setLeaf mutations don't bleed into baseEntries; the assembly loop relies on baseEntries staying intact for entries that never received an upsert. */
+      const seed = baseEntries[entryKey];
+      upsertEntries[entryKey] = seed ? deepClone(seed) : {};
     }
     const segments = field.split('.');
     if (value === undefined && resetFallback) {
@@ -1189,10 +1190,4 @@ export function validateMcpCrossField(
   return errors;
 }
 
-export {
-  YAML_LOCKED_FIELDS,
-  INSPECTOR_DERIVED,
-  REQUIRED_BY_TRANSPORT,
-  inferTransportType,
-  enumerateLeafPaths,
-};
+export { YAML_LOCKED_FIELDS, INSPECTOR_DERIVED, enumerateLeafPaths };

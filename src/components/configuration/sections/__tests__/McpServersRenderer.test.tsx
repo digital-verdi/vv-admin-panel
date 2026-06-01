@@ -415,6 +415,36 @@ describe('validateMcpCrossField', () => {
     ]);
     expect(errors).toEqual([]);
   });
+
+  it('treats a scope-mode leaf reset as revealing the inherited base value', () => {
+    /** In scope mode: scopeBaseline has the scope-overridden url; configValues (base) has the inherited url. Resetting mcpServers.foo.url should reveal the base url, so the validator must not flag missing url. */
+    const scopeBaseline = {
+      foo: { type: 'sse', url: 'https://scope-override.example.com' },
+    };
+    const baseFallback = {
+      foo: { type: 'sse', url: 'https://base.example.com' },
+    };
+    const errors = validateMcpCrossField(
+      scopeBaseline,
+      [['mcpServers.foo.url', undefined]],
+      baseFallback,
+    );
+    expect(errors).toEqual([]);
+  });
+
+  it('still flags a scope reset when no base inheritance is available', () => {
+    const scopeBaseline = {
+      foo: { type: 'sse', url: 'https://scope-only.example.com' },
+    };
+    const baseFallback = {};
+    const errors = validateMcpCrossField(
+      scopeBaseline,
+      [['mcpServers.foo.url', undefined]],
+      baseFallback,
+    );
+    expect(errors.length).toBe(1);
+    expect(errors[0].missingField).toBe('url');
+  });
 });
 
 describe('McpServersRenderer — scope mode', () => {

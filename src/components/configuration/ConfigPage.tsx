@@ -520,8 +520,17 @@ export function ConfigPage({ initialTab, highlightField, initialScope }: t.Confi
     const mcpEdits: Array<[string, t.ConfigValue]> = touched
       .filter((p) => p.startsWith('mcpServers.'))
       .map((p) => [p, editedValues[p]] as [string, t.ConfigValue]);
+    /** In scope mode, a leaf reset (undefined write) only removes the scope override and reveals the inherited base value, so feed configValues as the resetFallback. In base mode there is nothing to inherit from. */
+    const mcpResetFallback = (() => {
+      if (!isEditingScope) return undefined;
+      const v = configValues?.mcpServers;
+      if (v && typeof v === 'object' && !Array.isArray(v)) {
+        return v as Record<string, t.ConfigValue>;
+      }
+      return undefined;
+    })();
     if (mcpEdits.length > 0) {
-      const mcpErrors = validateMcpCrossField(mcpBaseline, mcpEdits);
+      const mcpErrors = validateMcpCrossField(mcpBaseline, mcpEdits, mcpResetFallback);
       if (mcpErrors.length > 0) {
         const { entryKey, missingField } = mcpErrors[0];
         const message = localize('com_config_mcp_invalid_after_edit', {
@@ -606,6 +615,8 @@ export function ConfigPage({ initialTab, highlightField, initialScope }: t.Confi
     invalidateAndResetScope,
     saving,
     baseActiveConfigValues,
+    configValues,
+    isEditingScope,
     localize,
   ]);
 

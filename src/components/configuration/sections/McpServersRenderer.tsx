@@ -1075,10 +1075,23 @@ function splitMcpEntryPath(
   return { entryKey: rest.slice(0, dotIdx), field: rest.slice(dotIdx + 1) };
 }
 
-/** Merges leaf edits onto the baseline MCP entries (omitting deleted entries) so callers can validate the post-save state. */
+function lookupLeaf(
+  obj: unknown,
+  segments: string[],
+): t.ConfigValue | undefined {
+  let cursor: unknown = obj;
+  for (const seg of segments) {
+    if (!cursor || typeof cursor !== 'object' || Array.isArray(cursor)) return undefined;
+    cursor = (cursor as Record<string, unknown>)[seg];
+  }
+  return cursor as t.ConfigValue | undefined;
+}
+
+/** Merges leaf edits onto the baseline MCP entries (omitting deleted entries) so callers can validate the post-save state. `resetFallback`, when provided, supplies the value that an `undefined` leaf write would reveal after the actual save (e.g. in scope mode, a leaf reset removes the scope override and exposes the inherited base value). */
 export function mergeMcpEdits(
   baseline: Record<string, t.ConfigValue>,
   edits: Array<[string, t.ConfigValue]>,
+  resetFallback?: Record<string, t.ConfigValue>,
 ): Record<string, t.ConfigValue> {
   const baseEntries: Record<string, Record<string, t.ConfigValue>> = {};
   for (const [k, v] of Object.entries(baseline)) {
@@ -1095,9 +1108,15 @@ export function mergeMcpEdits(
     knownKeys.add(entryKey);
     if (field === '') {
       if (value === undefined) {
-        deletedEntries.add(entryKey);
-        delete upsertEntries[entryKey];
-        delete baseEntries[entryKey];
+        const fallback = resetFallback?.[entryKey];
+        if (isPlainObject(fallback)) {
+          upsertEntries[entryKey] = JSON.parse(JSON.stringify(fallback));
+          deletedEntries.delete(entryKey);
+        } else {
+          deletedEntries.add(entryKey);
+          delete upsertEntries[entryKey];
+          delete baseEntries[entryKey];
+        }
       } else if (isPlainObject(value)) {
         upsertEntries[entryKey] = JSON.parse(JSON.stringify(value));
         deletedEntries.delete(entryKey);
@@ -1110,7 +1129,13 @@ export function mergeMcpEdits(
     if (!upsertEntries[entryKey]) {
       upsertEntries[entryKey] = baseEntries[entryKey] ?? {};
     }
-    setLeaf(upsertEntries[entryKey], field.split('.'), value);
+    const segments = field.split('.');
+    if (value === undefined && resetFallback) {
+      const inherited = lookupLeaf(resetFallback[entryKey], segments);
+      setLeaf(upsertEntries[entryKey], segments, inherited as t.ConfigValue);
+    } else {
+      setLeaf(upsertEntries[entryKey], segments, value);
+    }
   }
 
   const result: Record<string, t.ConfigValue> = {};
@@ -1126,12 +1151,13 @@ export function mergeMcpEdits(
   return result;
 }
 
-/** Returns a list of validation errors for affected MCP entries after applying edits, so the save flow can block invalid transport-state combinations the per-leaf PATCH cannot catch. */
+/** Returns a list of validation errors for affected MCP entries after applying edits, so the save flow can block invalid transport-state combinations the per-leaf PATCH cannot catch. `resetFallback` is the inherited baseline (e.g. base config in scope mode) whose values get revealed when a scope reset removes an override. */
 export function validateMcpCrossField(
   baseline: Record<string, t.ConfigValue>,
   edits: Array<[string, t.ConfigValue]>,
+  resetFallback?: Record<string, t.ConfigValue>,
 ): Array<{ entryKey: string; missingField: string }> {
-  const merged = mergeMcpEdits(baseline, edits);
+  const merged = mergeMcpEdits(baseline, edits, resetFallback);
   const knownKeys = new Set(Object.keys(baseline));
   const affected = new Set<string>();
   for (const [path] of edits) {

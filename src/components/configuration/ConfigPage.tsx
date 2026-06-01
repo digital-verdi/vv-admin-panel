@@ -509,9 +509,9 @@ export function ConfigPage({ initialTab, highlightField, initialScope }: t.Confi
     const touched = [...touchedPaths].filter((p) => p in editedValues);
     if (touched.length === 0) return;
 
-    /** Per-leaf saves can land an MCP entry in a transport state whose required siblings are missing (e.g. type=stdio with no command/args). Server-side per-field validation only sees one path at a time, so do the cross-field check here against the merged effective entry before any PATCH fires. */
+    /** Per-leaf saves can land an MCP entry in a transport state whose required siblings are missing (e.g. type=stdio with no command/args). Server-side per-field validation only sees one path at a time, so do the cross-field check here against the merged effective entry before any PATCH fires. Use baseActiveConfigValues so scope-mode edits validate against the scope-resolved baseline (where prior scope overrides supply some required fields) instead of the base config alone. */
     const mcpBaseline = (() => {
-      const v = configValues?.mcpServers;
+      const v = baseActiveConfigValues?.mcpServers;
       if (v && typeof v === 'object' && !Array.isArray(v)) {
         return v as Record<string, t.ConfigValue>;
       }
@@ -605,7 +605,7 @@ export function ConfigPage({ initialTab, highlightField, initialScope }: t.Confi
     invalidateAndResetBase,
     invalidateAndResetScope,
     saving,
-    configValues,
+    baseActiveConfigValues,
     localize,
   ]);
 

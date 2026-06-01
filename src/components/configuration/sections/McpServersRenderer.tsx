@@ -80,18 +80,12 @@ function setLeaf(
   let cursor: Record<string, t.ConfigValue> = target;
   for (let i = 0; i < segments.length - 1; i++) {
     const seg = segments[i];
-    const next = cursor[seg];
-    if (next == null || typeof next !== 'object' || Array.isArray(next)) {
-      cursor[seg] = {};
-    }
+    if (!isPlainObject(cursor[seg])) cursor[seg] = {};
     cursor = cursor[seg] as Record<string, t.ConfigValue>;
   }
   const leaf = segments[segments.length - 1];
-  if (value === undefined) {
-    delete cursor[leaf];
-  } else {
-    cursor[leaf] = value;
-  }
+  if (value === undefined) delete cursor[leaf];
+  else cursor[leaf] = value;
 }
 
 function applyLeafOverlay(
@@ -1081,23 +1075,6 @@ function splitMcpEntryPath(
   return { entryKey: rest.slice(0, dotIdx), field: rest.slice(dotIdx + 1) };
 }
 
-function setLeafByPath(
-  target: Record<string, t.ConfigValue>,
-  segments: string[],
-  value: t.ConfigValue,
-): void {
-  let cursor: Record<string, t.ConfigValue> = target;
-  for (let i = 0; i < segments.length - 1; i++) {
-    const seg = segments[i];
-    const next = cursor[seg];
-    if (!isPlainObject(next)) cursor[seg] = {};
-    cursor = cursor[seg] as Record<string, t.ConfigValue>;
-  }
-  const leaf = segments[segments.length - 1];
-  if (value === undefined) delete cursor[leaf];
-  else cursor[leaf] = value;
-}
-
 /** Merges leaf edits onto the baseline MCP entries (omitting deleted entries) so callers can validate the post-save state. */
 export function mergeMcpEdits(
   baseline: Record<string, t.ConfigValue>,
@@ -1133,7 +1110,7 @@ export function mergeMcpEdits(
     if (!upsertEntries[entryKey]) {
       upsertEntries[entryKey] = baseEntries[entryKey] ?? {};
     }
-    setLeafByPath(upsertEntries[entryKey], field.split('.'), value);
+    setLeaf(upsertEntries[entryKey], field.split('.'), value);
   }
 
   const result: Record<string, t.ConfigValue> = {};

@@ -8,6 +8,8 @@ const Route = getRouteApi('/_app');
 
 /** Status codes that indicate the grants system is not deployed (vs. access denied). */
 const GRANTS_UNAVAILABLE_PATTERN = /\b(404|503)\b|endpoint not found|fetch failed/i;
+const AUTH_DENIED_PATTERN =
+  /\b(401|403)\b|forbidden|unauthorized|authentication required|no admin session token/i;
 
 export function useCapabilities(): {
   capabilities: string[];
@@ -26,6 +28,9 @@ export function useCapabilities(): {
         const message = err instanceof Error ? err.message : String(err);
         if (GRANTS_UNAVAILABLE_PATTERN.test(message)) {
           return { available: false, capabilities: [] as string[] };
+        }
+        if (AUTH_DENIED_PATTERN.test(message)) {
+          return { available: true, capabilities: [] as string[] };
         }
         throw err;
       }

@@ -54,6 +54,7 @@ export function ConfigTabContent({
   sectionPermissions,
   schemaDefaults,
   showConfiguredOnly,
+  isEditingScope,
   baseRecordKeys,
   onValidationError,
 }: t.ConfigTabContentProps) {
@@ -182,6 +183,7 @@ export function ConfigTabContent({
       pendingResets,
       schemaDefaults,
       showConfiguredOnly,
+      isEditingScope,
       yamlBaseKeys: baseRecordKeys?.[dataKey],
       onValidationError,
     };

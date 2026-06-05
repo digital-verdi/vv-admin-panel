@@ -84,6 +84,7 @@ export interface ConfigTabContentProps {
   sectionPermissions?: Record<string, { canView: boolean; canEdit: boolean }>;
   schemaDefaults?: FlatConfigMap;
   showConfiguredOnly?: boolean;
+  isEditingScope?: boolean;
   /** YAML-defined entry keys per section, keyed by parent path. */
   baseRecordKeys?: Record<string, Set<string>>;
   onValidationError?: (message: string) => void;
@@ -225,6 +226,7 @@ export interface FieldRendererProps {
   pendingResets?: Set<string>;
   schemaDefaults?: FlatConfigMap;
   showConfiguredOnly?: boolean;
+  isEditingScope?: boolean;
   /** When true, never strip labels via isSoleField.  Use when rendering a
    *  subset of fields within a larger section (e.g. priority fields). */
   alwaysShowLabels?: boolean;

@@ -7,6 +7,7 @@ import { queryOptions, useQuery, useQueryClient, useMutation } from '@tanstack/r
 import type * as t from '@/types';
 import {
   removeFieldProfileValueFn,
+  tombstoneFieldProfileValueFn,
   bulkSaveProfileValuesFn,
   getBatchFieldProfilesFn,
   availableScopesOptions,
@@ -36,7 +37,7 @@ import { ConfigTabContent } from './ConfigTabContent';
 import { ImportYamlDialog } from './ImportYamlDialog';
 import { ContentToolbar } from './ContentToolbar';
 import { validateMcpCrossField } from './sections/McpServersRenderer';
-import { mergeIndexedArrayEdits } from './utils';
+import { mergeIndexedArrayEdits, partitionScopeResetPaths } from './utils';
 import { SystemCapabilities } from '@/constants';
 import { ConfigTabBar } from './ConfigTabBar';
 import { InfoBanner } from './InfoBanner';
@@ -565,19 +566,34 @@ export function ConfigPage({ initialTab, highlightField, initialScope }: t.Confi
     try {
       /** Resets must land before saves so a delete-then-recreate at the same path (e.g. MCP entry replaced with different fields) wipes stale fields first and the new leaf PATCHes don't race against the DELETE. */
       if (resets.length > 0) {
-        const resetPromises = resets.map((fieldPath) => {
-          if (isEditingScope) {
-            return removeFieldProfileValueFn({
-              data: {
-                fieldPath,
-                principalType: editingScope!.principalType,
-                principalId: editingScope!.principalId,
-              },
-            });
-          }
-          return resetBaseConfigFieldFn({ data: { fieldPath } });
-        });
-        await Promise.all(resetPromises);
+        const resetPromises = isEditingScope
+          ? (() => {
+              const { resetPaths, tombstonePaths } = partitionScopeResetPaths(resets);
+              return [
+                ...resetPaths.map((fieldPath) =>
+                  removeFieldProfileValueFn({
+                    data: {
+                      fieldPath,
+                      principalType: editingScope!.principalType,
+                      principalId: editingScope!.principalId,
+                    },
+                  }),
+                ),
+                ...tombstonePaths.map((fieldPath) =>
+                  tombstoneFieldProfileValueFn({
+                    data: {
+                      fieldPath,
+                      principalType: editingScope!.principalType,
+                      principalId: editingScope!.principalId,
+                    },
+                  }),
+                ),
+              ];
+            })()
+          : resets.map((fieldPath) => resetBaseConfigFieldFn({ data: { fieldPath } }));
+        if (resetPromises.length > 0) {
+          await Promise.all(resetPromises);
+        }
       }
 
       if (saves.length > 0) {
@@ -608,16 +624,16 @@ export function ConfigPage({ initialTab, highlightField, initialScope }: t.Confi
   }, [
     touchedPaths,
     editedValues,
-    isEditingScope,
-    editingScope,
-    showToast,
-    invalidateAndResetBase,
-    invalidateAndResetScope,
     saving,
+    isEditingScope,
     baseActiveConfigValues,
     configValues,
     baseConfigData,
     localize,
+    showToast,
+    editingScope,
+    invalidateAndResetScope,
+    invalidateAndResetBase,
   ]);
 
   const serializedEditedValues = useMemo(() => {
@@ -926,6 +942,7 @@ export function ConfigPage({ initialTab, highlightField, initialScope }: t.Confi
               sectionPermissions={sectionPermissions}
               schemaDefaults={schemaDefaults}
               showConfiguredOnly={showConfiguredOnly}
+              isEditingScope={isEditingScope}
               baseRecordKeys={baseRecordKeys}
               onValidationError={(message) => showToast({ type: 'error', message }, 5000)}
             />

@@ -4,6 +4,7 @@ import {
   getEnumOptions,
   getArrayItemType,
   splitUnionTypes,
+  partitionScopeResetPaths,
   mergeIndexedArrayEdits,
 } from './utils';
 import { createField } from '@/test/fixtures';
@@ -329,6 +330,35 @@ describe('mergeIndexedArrayEdits', () => {
     ]);
     expect(merged).toEqual({
       endpoints: { custom: { deep: { list: [{ name: 'x' }] } } },
+    });
+  });
+});
+
+describe('partitionScopeResetPaths', () => {
+  it('routes whole MCP entry resets to tombstones', () => {
+    expect(
+      partitionScopeResetPaths([
+        'mcpServers.github',
+        'mcpServers.github.url',
+        'interface.modelSelect',
+      ]),
+    ).toEqual({
+      resetPaths: ['mcpServers.github.url', 'interface.modelSelect'],
+      tombstonePaths: ['mcpServers.github'],
+    });
+  });
+
+  it('preserves input order within reset and tombstone groups', () => {
+    expect(
+      partitionScopeResetPaths([
+        'mcpServers.alpha',
+        'registration.enabled',
+        'mcpServers.beta',
+        'endpoints.custom.0',
+      ]),
+    ).toEqual({
+      resetPaths: ['registration.enabled', 'endpoints.custom.0'],
+      tombstonePaths: ['mcpServers.alpha', 'mcpServers.beta'],
     });
   });
 });

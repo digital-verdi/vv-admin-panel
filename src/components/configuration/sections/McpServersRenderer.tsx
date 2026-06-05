@@ -657,6 +657,7 @@ export function McpServersRenderer(props: t.FieldRendererProps) {
     disabled,
     editedValues,
     yamlBaseKeys,
+    isEditingScope,
     onValidationError,
   } = props;
   const localize = useLocalize();
@@ -926,6 +927,7 @@ export function McpServersRenderer(props: t.FieldRendererProps) {
           fields={fields}
           path={path}
           disabled={disabled}
+          isEditingScope={!!isEditingScope}
           isYamlSource={yamlSourceKeys.has(key)}
           onChange={onChange}
           onRemove={handleRemove}
@@ -964,6 +966,7 @@ const McpEntryRow = memo(function McpEntryRowImpl({
   fields,
   path,
   disabled,
+  isEditingScope,
   isYamlSource,
   onChange,
   onRemove,
@@ -975,6 +978,7 @@ const McpEntryRow = memo(function McpEntryRowImpl({
   fields: t.SchemaField[];
   path: string;
   disabled?: boolean;
+  isEditingScope: boolean;
   isYamlSource: boolean;
   onChange: (path: string, value: t.ConfigValue) => void;
   onRemove: (key: string) => void;
@@ -992,8 +996,7 @@ const McpEntryRow = memo(function McpEntryRowImpl({
   /** Dotted entry names predate the dot-rejecting create/rename validators; the save endpoint parses fieldPath as dot-delimited so any per-leaf write under such a key collides with a parallel "legacy" → "dotted" nested-object interpretation. Render them read-only so they stay visible in the list but never round-trip through the per-field save API. */
   const isDottedLegacy = entryKey.includes('.');
   const isReadOnly = !!disabled || isDottedLegacy;
-  /** Scope mode can't tombstone an inherited entry through per-leaf saves alone, so rename/delete are unreachable until the backend grows tombstone support; field edits still produce per-leaf scope overrides as expected. */
-  const isLockedIdentity = isYamlSource || isDottedLegacy;
+  const isLockedIdentity = (!isEditingScope && isYamlSource) || isDottedLegacy;
   const lockedKeys = isYamlSource && !isDottedLegacy ? YAML_LOCKED_FIELDS : undefined;
 
   const entryOnChange = useCallback(

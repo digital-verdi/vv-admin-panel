@@ -223,6 +223,28 @@ export function hasDescendant(path: string, paths?: Set<string>): boolean {
   return false;
 }
 
+export function isMcpEntryPath(path: string): boolean {
+  if (!path.startsWith('mcpServers.')) return false;
+  const key = path.slice('mcpServers.'.length);
+  return key.length > 0 && !key.includes('.');
+}
+
+export function partitionScopeResetPaths(paths: string[]): {
+  resetPaths: string[];
+  tombstonePaths: string[];
+} {
+  const resetPaths: string[] = [];
+  const tombstonePaths: string[] = [];
+  for (const path of paths) {
+    if (isMcpEntryPath(path)) {
+      tombstonePaths.push(path);
+    } else {
+      resetPaths.push(path);
+    }
+  }
+  return { resetPaths, tombstonePaths };
+}
+
 /**
  * Merge indexed-array edits (entries whose flat path ends in `.<digit>`) into
  * a config tree. Each indexed edit's value replaces the array element at that

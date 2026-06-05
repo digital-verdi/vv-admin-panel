@@ -173,6 +173,7 @@ function renderRenderer({
   editedValues = {},
   dbOverridePaths,
   yamlBaseKeys,
+  isEditingScope,
   onChange = vi.fn(),
   onValidationError = vi.fn(),
 }: {
@@ -180,6 +181,7 @@ function renderRenderer({
   editedValues?: t.FlatConfigMap;
   dbOverridePaths?: Set<string>;
   yamlBaseKeys?: Set<string>;
+  isEditingScope?: boolean;
   onChange?: (path: string, value: t.ConfigValue) => void;
   onValidationError?: (message: string) => void;
 }) {
@@ -197,6 +199,7 @@ function renderRenderer({
     editedValues,
     dbOverridePaths,
     yamlBaseKeys,
+    isEditingScope,
     onValidationError,
   };
   return {
@@ -284,6 +287,21 @@ describe('McpServersRenderer — YAML source detection', () => {
     expect(url!.hasAttribute('disabled')).toBe(false);
     expect(container.querySelector('button[aria-label^="com_ui_delete"]')).toBeNull();
     expect(container.querySelector('button[aria-label^="com_a11y_rename_entry"]')).toBeNull();
+  });
+
+  it('allows scoped identity actions on a YAML-defined server', () => {
+    const baseRecord = {
+      kapa: { type: 'sse', url: 'https://example.com', title: 'YAML title' },
+    };
+    const { container } = renderRenderer({
+      baseRecord,
+      yamlBaseKeys: new Set(['kapa']),
+      isEditingScope: true,
+    });
+
+    expect(container.querySelector('button[aria-label^="com_ui_delete"]')).not.toBeNull();
+    fireEvent.click(screen.getByText('kapa'));
+    expect(container.querySelector('button[aria-label^="com_a11y_rename_entry"]')).not.toBeNull();
   });
 
   it('does not lock identity for a server defined only via admin overrides', () => {

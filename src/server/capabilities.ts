@@ -12,6 +12,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { PrincipalType } from 'librechat-data-provider';
 import { hasImpliedCapability, SystemCapabilities } from '@librechat/data-schemas/capabilities';
 import type { AdminSystemGrant } from '@librechat/data-schemas';
+import { READ_AUDIT_LOG_CAPABILITY } from '@/constants';
 import { apiFetch, extractApiError } from './utils/api';
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -271,12 +272,14 @@ export type AuditLogPage = z.infer<typeof auditLogPageResponseSchema>;
 export const AUDIT_LOG_PAGE_SIZE = 50;
 
 /**
- * The LibreChat backend is the source of truth for audit-log access: the
- * `/api/admin/audit-log` route enforces `ACCESS_ADMIN`, and any future
- * tightening (e.g. a dedicated `READ_AUDIT_LOG` capability) belongs there. A
- * BFF-layer guard duplicating that check costs a `/effective` round-trip per
- * page request without buying real protection — the backend rejects the same
- * requests we would.
+ * Defense-in-depth: the LibreChat backend `/api/admin/audit-log` route gates
+ * on `ACCESS_ADMIN` + `READ_AUDIT_LOG`, but the BFF still calls
+ * `requireCapability(READ_AUDIT_LOG_CAPABILITY)` so an authenticated admin
+ * without `READ_AUDIT_LOG` is rejected at the proxy rather than relying on
+ * the backend to return 403. This keeps the policy consistent with the UI
+ * gate in `GrantsPage` and matches the established mutation-side pattern
+ * (`requireAllSectionCapabilities`, etc.). The extra `/effective` round-trip
+ * is amortized against React Query's per-user cache.
  */
 function buildAuditLogQuery(filters: AuditFilters): string {
   const params = new URLSearchParams();
@@ -295,6 +298,7 @@ function buildAuditLogQuery(filters: AuditFilters): string {
 export const getAuditLogPageFn = createServerFn({ method: 'GET' })
   .inputValidator(auditFilterSchema)
   .handler(async ({ data }: { data: AuditFilters }): Promise<AuditLogPage> => {
+    await requireCapability(READ_AUDIT_LOG_CAPABILITY);
     const withDefaults: AuditFilters = { limit: AUDIT_LOG_PAGE_SIZE, ...data };
     const response = await apiFetch(`/api/admin/audit-log${buildAuditLogQuery(withDefaults)}`);
     if (!response.ok) {
@@ -328,6 +332,7 @@ export const getAuditLogEntryFn = createServerFn({ method: 'GET' })
     }: {
       data: { id: string };
     }): Promise<{ entry: z.infer<typeof adminAuditLogEntrySchema> | null }> => {
+      await requireCapability(READ_AUDIT_LOG_CAPABILITY);
       const response = await apiFetch(`/api/admin/audit-log/${encodeURIComponent(data.id)}`);
       if (response.status === 404) return { entry: null };
       if (!response.ok) {
@@ -349,6 +354,7 @@ export const auditLogEntryQueryOptions = (id: string | undefined) =>
 export const exportAuditLogServerFn = createServerFn({ method: 'POST' })
   .inputValidator(auditFilterSchema)
   .handler(async ({ data }: { data: AuditFilters }): Promise<{ csv: string }> => {
+    await requireCapability(READ_AUDIT_LOG_CAPABILITY);
     const response = await apiFetch(`/api/admin/audit-log/export.csv${buildAuditLogQuery(data)}`, {
       method: 'GET',
       headers: { Accept: 'text/csv' },

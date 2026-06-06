@@ -151,8 +151,19 @@ export function AuditLogDetailDrawer({
        */
       setLatestEntry(null);
       setLatestNotFound(true);
+    } else if (loading) {
+      /**
+       * `entryId` switched to a new row while its fetch is in flight (e.g.
+       * the user clicks a different audit row before the previous one
+       * loaded). Without clearing the latches, the loading branch — gated on
+       * empty latches — would skip and the drawer would keep rendering the
+       * previous entry's content (or a stale not-found state) under the new
+       * `entryId`.
+       */
+      setLatestEntry(null);
+      setLatestNotFound(false);
     }
-  }, [entry, notFound]);
+  }, [entry, notFound, loading]);
 
   // Copied-feedback state for the permalink button.
   const [copied, setCopied] = useState(false);

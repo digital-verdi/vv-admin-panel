@@ -233,14 +233,23 @@ const isoDate = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?Z?)?$/, 'Expected ISO 8601 date');
 
+/**
+ * Wire format for `/api/admin/audit-log` filters. `actorQuery` /
+ * `targetQuery` are the canonical substring-match parameters on the backend;
+ * the legacy `actorId` / `targetPrincipalId` names are accepted there as
+ * deprecated aliases that log a warning on every use and will be removed in
+ * a future release. Using the canonical names here keeps the BFF off that
+ * deprecation path. The UI state variable + label naming stays unchanged
+ * because they are not wire format.
+ */
 const auditFilterSchema = z.object({
   search: z.string().max(200).optional(),
   action: z.array(z.enum(['grant_assigned', 'grant_removed'])).optional(),
   from: isoDate.optional(),
   to: isoDate.optional(),
-  actorId: z.string().max(128).optional(),
+  actorQuery: z.string().max(128).optional(),
   targetPrincipalType: z.nativeEnum(PrincipalType).optional(),
-  targetPrincipalId: z.string().max(128).optional(),
+  targetQuery: z.string().max(128).optional(),
   capability: z.string().max(128).optional(),
   offset: z.number().int().min(0).optional(),
   limit: z.number().int().min(1).max(500).optional(),

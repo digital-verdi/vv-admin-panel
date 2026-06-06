@@ -129,8 +129,8 @@ export function AuditLogTab() {
   const buildFilters = useCallback(
     (
       search: string,
-      actorId: string,
-      targetId: string,
+      actorQuery: string,
+      targetQuery: string,
       capability: string,
     ): Omit<AuditFilters, 'offset' | 'limit'> => {
       const trimmedSearch = search.trim();
@@ -139,8 +139,15 @@ export function AuditLogTab() {
         action: actionFilter.length ? actionFilter : undefined,
         from: localDayBoundaryIso(dateFrom, 'start'),
         to: localDayBoundaryIso(dateTo, 'end'),
-        actorId: actorId || undefined,
-        targetPrincipalId: targetId || undefined,
+        /**
+         * Wire-format keys are the canonical `actorQuery` / `targetQuery` —
+         * the backend treats the older `actorId` / `targetPrincipalId` names
+         * as deprecated aliases that log a warning per request. UI state
+         * variable names stay as `actorIdFilter` / `targetIdFilter` to avoid
+         * a churny rename in the JSX layer.
+         */
+        actorQuery: actorQuery || undefined,
+        targetQuery: targetQuery || undefined,
         targetPrincipalType: targetTypeFilter ? targetTypeFilter : undefined,
         capability: capability || undefined,
       };

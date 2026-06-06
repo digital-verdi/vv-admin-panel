@@ -457,7 +457,7 @@ export function AuditLogTab() {
             type="secondary"
             iconLeft="download"
             onClick={() => void handleExport()}
-            disabled={total === 0 || exporting}
+            disabled={displayTotal === 0 || exporting}
             loading={exporting}
             label={exportLabel}
           />
@@ -589,7 +589,16 @@ export function AuditLogTab() {
 
       <AuditLogDetailDrawer
         entry={selectedEntry}
-        open={selectedEntry !== null || entryNotFound}
+        /**
+         * Drawer is open whenever a deep-link `entryId` is in the URL. This
+         * keeps the panel mounted (showing a Loading state inside) while the
+         * single-entry fetch is in flight after navigating off the row's
+         * page or arriving on a cold permalink; without this, `open` was
+         * false until the fetch resolved and the drawer either flickered or
+         * never appeared.
+         */
+        open={!!entryId}
+        loading={!!entryId && entryFetch.isFetching && !entryOnPage && !entryNotFound}
         notFound={entryNotFound}
         onClose={closeEntry}
         onCopyPermalink={handleCopyPermalink}

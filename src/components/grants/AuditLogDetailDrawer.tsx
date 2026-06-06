@@ -9,6 +9,7 @@ import {
   capabilityLabel,
   formatTimestamp,
 } from './auditLogUtils';
+import { LoadingState } from '@/components/shared';
 import { getScopeTypeConfig } from '@/constants';
 import { useLocalize } from '@/hooks';
 import { cn } from '@/utils';
@@ -29,6 +30,10 @@ interface AuditLogDetailDrawerProps {
   /** Render a "no entry found" message instead of the detail body when the
    * deep-linked id couldn't be located (e.g. the entry was purged). */
   notFound?: boolean;
+  /** Render a loading shell while the single-entry deep-link query is in flight
+   * for an entry that is not on the current page. Without this, the drawer
+   * would either flicker shut during the fetch or never appear on cold load. */
+  loading?: boolean;
 }
 
 function CopyableMono({
@@ -119,6 +124,7 @@ export function AuditLogDetailDrawer({
   onCopyPermalink,
   onCopyFailed,
   notFound = false,
+  loading = false,
 }: AuditLogDetailDrawerProps): ReactElement | null {
   const localize = useLocalize();
 
@@ -164,6 +170,59 @@ export function AuditLogDetailDrawer({
     if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
     copiedTimerRef.current = setTimeout(() => setCopied(false), 1500);
   }, [entry, onCopyPermalink]);
+
+  /**
+   * Loading shell while the single-entry deep-link fetch is in flight for an
+   * entry that is not on the current page. Shows the same panel chrome (header
+   * + close button) as the not-found / regular branches so the drawer never
+   * appears to flicker shut during the fetch.
+   */
+  if (loading && !latestEntry && !latestNotFound) {
+    return (
+      <Dialog.Root
+        open={open}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) onClose();
+        }}
+      >
+        <Dialog.Portal>
+          <Dialog.Overlay
+            className={cn(
+              'fixed inset-0 z-(--z-overlay) bg-black/30 backdrop-blur-[1px]',
+              'data-[state=closed]:animate-overlay-out data-[state=open]:animate-overlay-in',
+            )}
+          />
+          <Dialog.Content
+            aria-label={localize('com_audit_detail_title')}
+            onEscapeKeyDown={() => onClose()}
+            className={cn(
+              'fixed top-0 right-0 z-(--z-overlay) flex h-full w-full flex-col bg-(--cui-color-background-panel) shadow-xl sm:w-120',
+              'border-l border-(--cui-color-stroke-default)',
+              'will-change-transform',
+              'data-[state=closed]:animate-drawer-out data-[state=open]:animate-drawer-in',
+            )}
+          >
+            <Dialog.Title className="sr-only">{localize('com_audit_detail_title')}</Dialog.Title>
+            <header className="flex items-center justify-between gap-3 border-b border-(--cui-color-stroke-default) px-4 py-3">
+              <span className="text-sm font-semibold text-(--cui-color-text-default)">
+                {localize('com_audit_detail_title')}
+              </span>
+              <IconButton
+                icon="cross"
+                type="ghost"
+                size="sm"
+                aria-label={localize('com_audit_detail_close')}
+                onClick={onClose}
+              />
+            </header>
+            <div className="flex flex-1 items-center justify-center px-4 py-8">
+              <LoadingState />
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+    );
+  }
 
   if (latestNotFound && !latestEntry) {
     return (

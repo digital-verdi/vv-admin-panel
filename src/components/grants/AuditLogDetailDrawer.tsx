@@ -20,6 +20,12 @@ interface AuditLogDetailDrawerProps {
   /** Resolves to `true` when the clipboard write succeeded so the drawer only
    * flips to its "Copied!" affordance after a real success. */
   onCopyPermalink: (entryId: string) => Promise<boolean>;
+  /** Invoked when any inline `CopyableMono` (timestamp, actor/target/entry IDs,
+   * capability) fails to write to the clipboard. The caller is responsible for
+   * surfacing the failure — typically via the same screen-reader announcement
+   * used for the permalink-copy failure path so the drawer's copy controls are
+   * not silent on clipboard error. */
+  onCopyFailed?: () => void;
   /** Render a "no entry found" message instead of the detail body when the
    * deep-linked id couldn't be located (e.g. the entry was purged). */
   notFound?: boolean;
@@ -111,6 +117,7 @@ export function AuditLogDetailDrawer({
   open,
   onClose,
   onCopyPermalink,
+  onCopyFailed,
   notFound = false,
 }: AuditLogDetailDrawerProps): ReactElement | null {
   const localize = useLocalize();
@@ -125,12 +132,18 @@ export function AuditLogDetailDrawer({
   // component would short-circuit to `return null` and skip the exit animation.
   const [latestNotFound, setLatestNotFound] = useState<boolean>(notFound);
   useEffect(() => {
-    if (entry) setLatestEntry(entry);
-  }, [entry]);
-  useEffect(() => {
     if (entry) {
+      setLatestEntry(entry);
       setLatestNotFound(false);
     } else if (notFound) {
+      /**
+       * A permalink to a missing entry can arrive after the user has opened a
+       * real entry earlier in the session, leaving `latestEntry` stale. Clear
+       * it so the not-found branch — which is gated on `!latestEntry` — fires
+       * instead of falling through and showing the previous entry's content
+       * under a not-found URL.
+       */
+      setLatestEntry(null);
       setLatestNotFound(true);
     }
   }, [entry, notFound]);
@@ -284,6 +297,7 @@ export function AuditLogDetailDrawer({
                     <CopyableMono
                       value={latestEntry.timestamp}
                       ariaLabel={`Copy ${localize('com_audit_detail_timestamp')}`}
+                      onCopyFailed={onCopyFailed}
                     />
                   </div>
                 </DetailRow>
@@ -296,6 +310,7 @@ export function AuditLogDetailDrawer({
                     <CopyableMono
                       value={latestEntry.actorId}
                       ariaLabel={`Copy ${localize('com_audit_detail_actor')} ID`}
+                      onCopyFailed={onCopyFailed}
                     />
                   </div>
                 </DetailRow>
@@ -320,6 +335,7 @@ export function AuditLogDetailDrawer({
                     <CopyableMono
                       value={latestEntry.targetPrincipalId}
                       ariaLabel={`Copy ${localize('com_audit_detail_target')} ID`}
+                      onCopyFailed={onCopyFailed}
                     />
                   </div>
                 </DetailRow>
@@ -332,6 +348,7 @@ export function AuditLogDetailDrawer({
                     <CopyableMono
                       value={latestEntry.capability}
                       ariaLabel={`Copy ${localize('com_audit_detail_capability')}`}
+                      onCopyFailed={onCopyFailed}
                     />
                   </div>
                 </DetailRow>
@@ -340,6 +357,7 @@ export function AuditLogDetailDrawer({
                   <CopyableMono
                     value={latestEntry.id}
                     ariaLabel={`Copy ${localize('com_audit_detail_entry_id')}`}
+                    onCopyFailed={onCopyFailed}
                   />
                 </DetailRow>
               </dl>

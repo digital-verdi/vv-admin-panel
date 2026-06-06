@@ -180,12 +180,12 @@ export function AuditLogTab() {
     }
   }, [currentPage, totalPages]);
 
-  // Reset to page 1 whenever non-debounced filters change. Debounced filter
-  // handlers (search, actor id, target id, capability) reset inline within
-  // the same setTimeout so the page change lands with the new query key.
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [actionFilter, dateFrom, dateTo, targetTypeFilter]);
+  /**
+   * Page reset is wired inline at each filter call-site (action toggle, date
+   * pickers, date clear, target type, debounced text filters via `onCommit`)
+   * so the new query key fires once with `currentPage = 1` rather than running
+   * a stale page-N fetch first and then re-fetching after a deferred effect.
+   */
 
   /**
    * Single-line signature of the active filter set so the announcement effect
@@ -374,6 +374,7 @@ export function AuditLogTab() {
                     setActionFilter((prev) =>
                       prev.includes(act) ? prev.filter((a) => a !== act) : [...prev, act],
                     );
+                    resetToFirstPage();
                   }}
                 />
               );
@@ -391,7 +392,10 @@ export function AuditLogTab() {
               <DatePicker
                 key={`from-${dateResetNonce}`}
                 date={isoDateToDate(dateFrom)}
-                onSelectDate={(d) => setDateFrom(d ? dateToIsoDate(d) : '')}
+                onSelectDate={(d) => {
+                  setDateFrom(d ? dateToIsoDate(d) : '');
+                  resetToFirstPage();
+                }}
                 placeholder={localize('com_audit_date_from')}
               />
             </DatePickerCell>
@@ -407,7 +411,10 @@ export function AuditLogTab() {
               <DatePicker
                 key={`to-${dateResetNonce}`}
                 date={isoDateToDate(dateTo)}
-                onSelectDate={(d) => setDateTo(d ? dateToIsoDate(d) : '')}
+                onSelectDate={(d) => {
+                  setDateTo(d ? dateToIsoDate(d) : '');
+                  resetToFirstPage();
+                }}
                 placeholder={localize('com_audit_date_to')}
               />
             </DatePickerCell>
@@ -422,6 +429,7 @@ export function AuditLogTab() {
                 setDateFrom('');
                 setDateTo('');
                 setDateResetNonce((n) => n + 1);
+                resetToFirstPage();
               }}
             />
           )}
@@ -456,7 +464,10 @@ export function AuditLogTab() {
           <Select
             label={localize('com_audit_filter_target_type')}
             value={targetTypeFilter === '' ? TARGET_TYPE_ALL : targetTypeFilter}
-            onSelect={(v) => setTargetTypeFilter(v === TARGET_TYPE_ALL ? '' : (v as PrincipalType))}
+            onSelect={(v) => {
+              setTargetTypeFilter(v === TARGET_TYPE_ALL ? '' : (v as PrincipalType));
+              resetToFirstPage();
+            }}
             placeholder={localize('com_ui_all')}
           >
             <Select.Item value={TARGET_TYPE_ALL}>{localize('com_ui_all')}</Select.Item>
@@ -561,6 +572,7 @@ export function AuditLogTab() {
         notFound={entryNotFound}
         onClose={closeEntry}
         onCopyPermalink={handleCopyPermalink}
+        onCopyFailed={() => announce(localize('com_a11y_copy_failed'))}
       />
     </div>
   );

@@ -91,11 +91,17 @@ export function EditRoleDialog({ role, canManage, onClose }: t.EditRoleDialogPro
   };
 
   const updateMutation = useMutation({
-    mutationFn: async (): Promise<string> => {
+    mutationFn: async ({
+      name: submittedName,
+    }: {
+      name: string;
+    }): Promise<{ roleId: string; name: string }> => {
       if (!role) throw new Error(localize('com_access_role_unavailable'));
       let roleId = role.id;
       if (detailsDirty) {
-        const result = await updateRoleFn({ data: { id: role.id, name, description } });
+        const result = await updateRoleFn({
+          data: { id: role.id, name: submittedName, description },
+        });
         roleId = result.role.id;
       }
       if (permissionsDirty && permissions) {
@@ -128,20 +134,20 @@ export function EditRoleDialog({ role, canManage, onClose }: t.EditRoleDialogPro
         parts.push(localize('com_access_member_ops_failed', { count: failures.length }));
         throw new Error(parts.join(', '));
       }
-      return roleId;
+      return { roleId, name: submittedName };
     },
-    onSuccess: (newRoleId) => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['roles'] });
       queryClient.invalidateQueries({ queryKey: ['role', role?.id] });
-      if (newRoleId !== role?.id) {
-        queryClient.invalidateQueries({ queryKey: ['role', newRoleId] });
+      if (data.roleId !== role?.id) {
+        queryClient.invalidateQueries({ queryKey: ['role', data.roleId] });
       }
       queryClient.invalidateQueries({ queryKey: ['roleAssignments'] });
       queryClient.invalidateQueries({ queryKey: ['roleMembers', role?.id] });
-      if (newRoleId !== role?.id) {
-        queryClient.invalidateQueries({ queryKey: ['roleMembers', newRoleId] });
+      if (data.roleId !== role?.id) {
+        queryClient.invalidateQueries({ queryKey: ['roleMembers', data.roleId] });
       }
-      notifySuccess(localize('com_toast_role_updated', { name }));
+      notifySuccess(localize('com_toast_role_updated', { name: data.name }));
       onClose();
     },
     onError: (err: Error) => notifyError(err.message),
@@ -155,7 +161,7 @@ export function EditRoleDialog({ role, canManage, onClose }: t.EditRoleDialogPro
       setActiveTab('details');
       return;
     }
-    updateMutation.mutate();
+    updateMutation.mutate({ name });
   };
 
   const handleSubmit = (e: React.FormEvent) => {

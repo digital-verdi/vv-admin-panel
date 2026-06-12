@@ -31,19 +31,20 @@ export function CreateRoleDialog({ open, onClose }: t.CreateRoleDialogProps) {
   };
 
   const mutation = useMutation({
-    mutationFn: async () => {
-      const { role } = await createRoleFn({ data: { name, description } });
+    mutationFn: async ({ name: submittedName }: { name: string }) => {
+      const { role } = await createRoleFn({ data: { name: submittedName, description } });
       await updateRolePermissionsFn({ data: { id: role.id, permissions } });
       for (const user of selectedUsers) {
         await addRoleMemberFn({ data: { roleId: role.id, userId: user.id } });
       }
+      return { name: submittedName };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['roles'] });
       queryClient.invalidateQueries({ queryKey: ['roleMembers'] });
       queryClient.invalidateQueries({ queryKey: ['availableScopes'] });
       queryClient.invalidateQueries({ queryKey: ['roleAssignments'] });
-      notifySuccess(localize('com_toast_role_created', { name }));
+      notifySuccess(localize('com_toast_role_created', { name: data.name }));
       resetAndClose();
     },
     onError: (err: Error) => notifyError(err.message),
@@ -56,7 +57,7 @@ export function CreateRoleDialog({ open, onClose }: t.CreateRoleDialogProps) {
       setActiveTab('details');
       return;
     }
-    mutation.mutate();
+    mutation.mutate({ name });
   };
 
   const handleSubmit = (e: React.FormEvent) => {

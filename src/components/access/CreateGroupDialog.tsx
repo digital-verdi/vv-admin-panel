@@ -27,18 +27,21 @@ export function CreateGroupDialog({ open, onClose }: t.CreateGroupDialogProps) {
   };
 
   const mutation = useMutation({
-    mutationFn: async () => {
-      const { group } = await createGroupFn({ data: { name, description } });
+    mutationFn: async ({ name: submittedName }: { name: string }) => {
+      const { group } = await createGroupFn({
+        data: { name: submittedName, description },
+      });
       for (const user of selectedUsers) {
         await addGroupMemberFn({ data: { groupId: group.id, userId: user.id } });
       }
+      return { name: submittedName };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['groups'] });
       queryClient.invalidateQueries({ queryKey: ['groupMembers'] });
       queryClient.invalidateQueries({ queryKey: ['availableScopes'] });
       queryClient.invalidateQueries({ queryKey: ['groupAssignments'] });
-      notifySuccess(localize('com_toast_group_created', { name }));
+      notifySuccess(localize('com_toast_group_created', { name: data.name }));
       resetAndClose();
     },
     onError: (err: Error) => notifyError(err.message),
@@ -51,7 +54,7 @@ export function CreateGroupDialog({ open, onClose }: t.CreateGroupDialogProps) {
       setActiveTab('details');
       return;
     }
-    mutation.mutate();
+    mutation.mutate({ name });
   };
 
   const handleSubmit = (e: React.FormEvent) => {

@@ -16,10 +16,13 @@ export function CreateUserDialog({ open, onClose }: t.CreateUserDialogProps) {
   const [error, setError] = useState('');
 
   const mutation = useMutation({
-    mutationFn: () => createUserFn({ data: { name, email, role } }),
-    onSuccess: () => {
+    mutationFn: async ({ name: submittedName }: { name: string }) => {
+      await createUserFn({ data: { name: submittedName, email, role } });
+      return { name: submittedName };
+    },
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
-      notifySuccess(localize('com_toast_user_invited', { name }));
+      notifySuccess(localize('com_toast_user_invited', { name: data.name }));
       resetAndClose();
     },
     onError: (err: Error) => notifyError(err.message),
@@ -43,7 +46,7 @@ export function CreateUserDialog({ open, onClose }: t.CreateUserDialogProps) {
       setError(localize('com_users_email_required'));
       return;
     }
-    mutation.mutate();
+    mutation.mutate({ name });
   };
 
   return (

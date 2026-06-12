@@ -73,10 +73,10 @@ export function EditGroupDialog({ group, canManage, onClose }: t.EditGroupDialog
   };
 
   const mutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async ({ name: submittedName }: { name: string }) => {
       if (!group) throw new Error(localize('com_access_group_unavailable'));
       if (detailsDirty) {
-        await updateGroupFn({ data: { id: group.id, name, description } });
+        await updateGroupFn({ data: { id: group.id, name: submittedName, description } });
       }
       const memberResults = await Promise.allSettled([
         ...pendingAdditions.map((user) =>
@@ -95,12 +95,13 @@ export function EditGroupDialog({ group, canManage, onClose }: t.EditGroupDialog
         parts.push(localize('com_access_member_ops_failed', { count: failures.length }));
         throw new Error(parts.join(', '));
       }
+      return { name: submittedName };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['groups'] });
       queryClient.invalidateQueries({ queryKey: ['groupAssignments'] });
       queryClient.invalidateQueries({ queryKey: ['groupMembers', group?.id] });
-      notifySuccess(localize('com_toast_group_updated', { name }));
+      notifySuccess(localize('com_toast_group_updated', { name: data.name }));
       onClose();
     },
     onError: (err: Error) => notifyError(err.message),
@@ -114,7 +115,7 @@ export function EditGroupDialog({ group, canManage, onClose }: t.EditGroupDialog
       setActiveTab('details');
       return;
     }
-    mutation.mutate();
+    mutation.mutate({ name });
   };
 
   const handleSubmit = (e: React.FormEvent) => {

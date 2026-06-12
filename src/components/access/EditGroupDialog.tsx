@@ -74,7 +74,7 @@ export function EditGroupDialog({ group, canManage, onClose }: t.EditGroupDialog
 
   const mutation = useMutation({
     mutationFn: async () => {
-      if (!group) return;
+      if (!group) throw new Error(localize('com_access_group_unavailable'));
       if (detailsDirty) {
         await updateGroupFn({ data: { id: group.id, name, description } });
       }
@@ -108,6 +108,7 @@ export function EditGroupDialog({ group, canManage, onClose }: t.EditGroupDialog
 
   const doSubmit = () => {
     setError('');
+    if (!group) return;
     if (!name.trim()) {
       setError(localize('com_access_name_required'));
       setActiveTab('details');

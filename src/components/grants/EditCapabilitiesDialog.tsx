@@ -52,7 +52,9 @@ export function EditCapabilitiesDialog({
 
   const saveMutation = useMutation({
     mutationFn: async (vars: { name: string }) => {
-      if (!principalType || !principalId) return;
+      if (!principalType || !principalId) {
+        throw new Error(localize('com_cap_principal_unavailable'));
+      }
       const toGrant: string[] = [];
       const toRevoke: string[] = [];
       for (const [cap, enabled] of Object.entries(capabilities)) {
@@ -82,8 +84,9 @@ export function EditCapabilitiesDialog({
 
   const handleSave = useCallback(() => {
     setError('');
+    if (!principalType || !principalId) return;
     saveMutation.mutate({ name: principalName });
-  }, [saveMutation]);
+  }, [saveMutation, principalType, principalId, principalName]);
 
   const dialogTitle = principalType
     ? `${localize('com_cap_edit_title', { name: principalName })}`

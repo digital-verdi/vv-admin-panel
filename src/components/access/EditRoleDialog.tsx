@@ -92,7 +92,7 @@ export function EditRoleDialog({ role, canManage, onClose }: t.EditRoleDialogPro
 
   const updateMutation = useMutation({
     mutationFn: async (): Promise<string> => {
-      if (!role) return '';
+      if (!role) throw new Error(localize('com_access_role_unavailable'));
       let roleId = role.id;
       if (detailsDirty) {
         const result = await updateRoleFn({ data: { id: role.id, name, description } });
@@ -149,6 +149,7 @@ export function EditRoleDialog({ role, canManage, onClose }: t.EditRoleDialogPro
 
   const doSubmit = () => {
     setError('');
+    if (!role) return;
     if (!name.trim()) {
       setError(localize('com_access_name_required'));
       setActiveTab('details');

@@ -21,8 +21,8 @@ import {
   UserSearchInline,
 } from '@/components/shared';
 import { RolePermissionsPanel } from './RolePermissionsPanel';
+import { cn, notifySuccess, notifyError } from '@/utils';
 import { useLocalize } from '@/hooks';
-import { cn } from '@/utils';
 
 type EditRoleTab = 'details' | 'permissions' | 'members';
 
@@ -113,9 +113,7 @@ export function EditRoleDialog({ role, canManage, onClose }: t.EditRoleDialogPro
         }
       }
       const memberResults = await Promise.allSettled([
-        ...pendingAdditions.map((user) =>
-          addRoleMemberFn({ data: { roleId, userId: user.id } }),
-        ),
+        ...pendingAdditions.map((user) => addRoleMemberFn({ data: { roleId, userId: user.id } })),
         ...pendingRemovals.map((member) =>
           removeRoleMemberFn({ data: { roleId, userId: member.userId } }),
         ),
@@ -143,9 +141,10 @@ export function EditRoleDialog({ role, canManage, onClose }: t.EditRoleDialogPro
       if (newRoleId !== role?.id) {
         queryClient.invalidateQueries({ queryKey: ['roleMembers', newRoleId] });
       }
+      notifySuccess(localize('com_toast_role_updated', { name }));
       onClose();
     },
-    onError: (err: Error) => setError(err.message),
+    onError: (err: Error) => notifyError(err.message),
   });
 
   const doSubmit = () => {
@@ -183,17 +182,18 @@ export function EditRoleDialog({ role, canManage, onClose }: t.EditRoleDialogPro
             ariaLabel={localize('com_access_edit_role')}
           >
             <Tabs.TriggersList>
-              <Tabs.Trigger value="details">
-                {localize('com_access_tab_details')}
-              </Tabs.Trigger>
+              <Tabs.Trigger value="details">{localize('com_access_tab_details')}</Tabs.Trigger>
               <Tabs.Trigger value="permissions">
                 {localize('com_access_tab_permissions')}
               </Tabs.Trigger>
-              <Tabs.Trigger value="members">
-                {localize('com_access_tab_members')}
-              </Tabs.Trigger>
+              <Tabs.Trigger value="members">{localize('com_access_tab_members')}</Tabs.Trigger>
             </Tabs.TriggersList>
-            <Tabs.Content value="details" forceMount tabIndex={-1} className={cn(activeTab !== 'details' && 'hidden')}>
+            <Tabs.Content
+              value="details"
+              forceMount
+              tabIndex={-1}
+              className={cn(activeTab !== 'details' && 'hidden')}
+            >
               <div className="flex flex-col gap-5 pt-5">
                 {role?.isSystemRole && (
                   <span className="inline-flex w-fit items-center rounded-md bg-(--cui-color-background-muted) px-2 py-1 text-xs font-medium text-(--cui-color-text-muted)">
@@ -239,7 +239,12 @@ export function EditRoleDialog({ role, canManage, onClose }: t.EditRoleDialogPro
                 </div>
               </div>
             </Tabs.Content>
-            <Tabs.Content value="permissions" forceMount tabIndex={-1} className={cn(activeTab !== 'permissions' && 'hidden')}>
+            <Tabs.Content
+              value="permissions"
+              forceMount
+              tabIndex={-1}
+              className={cn(activeTab !== 'permissions' && 'hidden')}
+            >
               <div className="pt-5">
                 {(() => {
                   if (roleDetail.isLoading) {
@@ -269,7 +274,12 @@ export function EditRoleDialog({ role, canManage, onClose }: t.EditRoleDialogPro
                 })()}
               </div>
             </Tabs.Content>
-            <Tabs.Content value="members" forceMount tabIndex={-1} className={cn(activeTab !== 'members' && 'hidden')}>
+            <Tabs.Content
+              value="members"
+              forceMount
+              tabIndex={-1}
+              className={cn(activeTab !== 'members' && 'hidden')}
+            >
               <div className="flex flex-col gap-4 pt-5">
                 {canManage && (
                   <UserSearchInline
@@ -297,7 +307,12 @@ export function EditRoleDialog({ role, canManage, onClose }: t.EditRoleDialogPro
                       {localize('com_access_pending_removals', { count: pendingRemovals.length })}
                     </span>
                     <SelectedMemberList
-                      users={pendingRemovals.map((m) => ({ id: m.userId, name: m.name, email: m.email, avatarUrl: m.avatarUrl }))}
+                      users={pendingRemovals.map((m) => ({
+                        id: m.userId,
+                        name: m.name,
+                        email: m.email,
+                        avatarUrl: m.avatarUrl,
+                      }))}
                       onRemove={unstageRemoval}
                       disabled={updateMutation.isPending}
                     />

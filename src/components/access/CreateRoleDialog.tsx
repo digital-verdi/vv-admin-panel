@@ -6,9 +6,9 @@ import type * as t from '@/types';
 import { addRoleMemberFn, createRoleFn, updateRolePermissionsFn } from '@/server';
 import { SelectedMemberList, UserSearchInline } from '@/components/shared';
 import { RolePermissionsPanel } from './RolePermissionsPanel';
+import { cn, notifySuccess, notifyError } from '@/utils';
 import { defaultPermissions } from '@/constants';
 import { useLocalize } from '@/hooks';
-import { cn } from '@/utils';
 
 export function CreateRoleDialog({ open, onClose }: t.CreateRoleDialogProps) {
   const localize = useLocalize();
@@ -43,9 +43,10 @@ export function CreateRoleDialog({ open, onClose }: t.CreateRoleDialogProps) {
       queryClient.invalidateQueries({ queryKey: ['roleMembers'] });
       queryClient.invalidateQueries({ queryKey: ['availableScopes'] });
       queryClient.invalidateQueries({ queryKey: ['roleAssignments'] });
+      notifySuccess(localize('com_toast_role_created', { name }));
       resetAndClose();
     },
-    onError: (err: Error) => setError(err.message),
+    onError: (err: Error) => notifyError(err.message),
   });
 
   const doSubmit = () => {
@@ -94,17 +95,18 @@ export function CreateRoleDialog({ open, onClose }: t.CreateRoleDialogProps) {
             ariaLabel={localize('com_access_create_role')}
           >
             <Tabs.TriggersList>
-              <Tabs.Trigger value="details">
-                {localize('com_access_tab_details')}
-              </Tabs.Trigger>
+              <Tabs.Trigger value="details">{localize('com_access_tab_details')}</Tabs.Trigger>
               <Tabs.Trigger value="permissions">
                 {localize('com_access_tab_permissions')}
               </Tabs.Trigger>
-              <Tabs.Trigger value="members">
-                {localize('com_access_tab_members')}
-              </Tabs.Trigger>
+              <Tabs.Trigger value="members">{localize('com_access_tab_members')}</Tabs.Trigger>
             </Tabs.TriggersList>
-            <Tabs.Content value="details" forceMount tabIndex={-1} className={cn(activeTab !== 'details' && 'hidden')}>
+            <Tabs.Content
+              value="details"
+              forceMount
+              tabIndex={-1}
+              className={cn(activeTab !== 'details' && 'hidden')}
+            >
               <div className="flex flex-col gap-5 pt-5">
                 <div className="flex flex-col gap-1.5">
                   <label
@@ -141,7 +143,12 @@ export function CreateRoleDialog({ open, onClose }: t.CreateRoleDialogProps) {
                 </div>
               </div>
             </Tabs.Content>
-            <Tabs.Content value="permissions" forceMount tabIndex={-1} className={cn(activeTab !== 'permissions' && 'hidden')}>
+            <Tabs.Content
+              value="permissions"
+              forceMount
+              tabIndex={-1}
+              className={cn(activeTab !== 'permissions' && 'hidden')}
+            >
               <div className="pt-5">
                 <RolePermissionsPanel
                   permissions={permissions}
@@ -150,7 +157,12 @@ export function CreateRoleDialog({ open, onClose }: t.CreateRoleDialogProps) {
                 />
               </div>
             </Tabs.Content>
-            <Tabs.Content value="members" forceMount tabIndex={-1} className={cn(activeTab !== 'members' && 'hidden')}>
+            <Tabs.Content
+              value="members"
+              forceMount
+              tabIndex={-1}
+              className={cn(activeTab !== 'members' && 'hidden')}
+            >
               <div className="flex flex-col gap-4 pt-5">
                 <UserSearchInline
                   existingIds={selectedUsers.map((u) => u.id)}

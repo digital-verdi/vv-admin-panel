@@ -35,7 +35,15 @@ function GrantsRoute() {
 
   const handleTabChange = (value: string) => {
     if (isValidTab(value)) {
-      navigate({ search: (prev: Record<string, unknown>) => ({ ...prev, tab: value }) });
+      navigate({
+        search: (prev: Record<string, unknown>) => ({
+          ...prev,
+          tab: value,
+          /** Drop the audit-entry deep link when leaving the audit-log tab so it
+           * doesn't silently reopen on return or linger in Management URLs. */
+          entryId: value === 'audit-log' ? (prev.entryId as string | undefined) : undefined,
+        }),
+      });
     }
   };
 

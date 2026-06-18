@@ -374,7 +374,9 @@ export const auditLogQueryOptions = (
   });
 
 export const getAuditLogEntryFn = createServerFn({ method: 'GET' })
-  .inputValidator(z.object({ id: z.string().min(1).max(128) }))
+  /** Constrain to the backend's ObjectId shape so a crafted `entryId` (e.g.
+   * `export.csv`) can't be proxied as a sibling audit-log sub-route. */
+  .inputValidator(z.object({ id: z.string().regex(/^[a-f0-9]{24}$/i) }))
   .handler(
     async ({
       data,
@@ -392,11 +394,16 @@ export const getAuditLogEntryFn = createServerFn({ method: 'GET' })
     },
   );
 
+/** Matches the backend's audit-entry ObjectId shape. */
+const AUDIT_ENTRY_ID_RE = /^[a-f0-9]{24}$/i;
+
 export const auditLogEntryQueryOptions = (id: string | undefined) =>
   queryOptions({
     queryKey: ['auditLogEntry', id] as const,
     queryFn: () => getAuditLogEntryFn({ data: { id: id ?? '' } }),
-    enabled: !!id,
+    /** Only fire for a well-formed id so a crafted `?entryId=` deep link can't
+     * reach the server fn (which would reject it anyway). */
+    enabled: !!id && AUDIT_ENTRY_ID_RE.test(id),
     staleTime: 60_000,
   });
 

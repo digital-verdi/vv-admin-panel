@@ -9,6 +9,7 @@ import type * as t from '@/types';
 import {
   ACTION_BADGE_STATE,
   ACTION_LABEL_KEY,
+  auditCapability,
   capabilityLabel,
   dateToIsoDate,
   formatTimestamp,
@@ -33,7 +34,7 @@ import { AuditLogDetailDrawer } from './AuditLogDetailDrawer';
 import { getScopeTypeConfig } from '@/constants';
 import { cn } from '@/utils';
 
-const AUDIT_ACTIONS: readonly AuditAction[] = ['grant_assigned', 'grant_removed'] as const;
+const AUDIT_ACTIONS: readonly AuditAction[] = ['grant.assigned', 'grant.removed'] as const;
 const TARGET_TYPE_OPTIONS: readonly PrincipalType[] = [
   PrincipalType.USER,
   PrincipalType.GROUP,
@@ -148,7 +149,7 @@ export function AuditLogTab() {
          */
         actorQuery: actorQuery || undefined,
         targetQuery: targetQuery || undefined,
-        targetPrincipalType: targetTypeFilter ? targetTypeFilter : undefined,
+        targetType: targetTypeFilter ? targetTypeFilter : undefined,
         capability: capability || undefined,
       };
     },
@@ -262,8 +263,7 @@ export function AuditLogTab() {
    * error — the single-entry endpoint is independent of the list query.
    */
   const entryOnPage = useMemo(
-    () =>
-      entryId && !isError ? (pageEntries.find((e) => e.id === entryId) ?? null) : null,
+    () => (entryId && !isError ? (pageEntries.find((e) => e.id === entryId) ?? null) : null),
     [pageEntries, entryId, isError],
   );
 
@@ -413,10 +413,7 @@ export function AuditLogTab() {
           </div>
 
           <div className="flex items-center gap-1.5">
-            <label
-              htmlFor="audit-date-from"
-              className="text-xs text-(--cui-color-text-muted)"
-            >
+            <label htmlFor="audit-date-from" className="text-xs text-(--cui-color-text-muted)">
               {localize('com_audit_date_from')}
             </label>
             <DatePickerCell resetKey={dateResetNonce} inputId="audit-date-from">
@@ -432,10 +429,7 @@ export function AuditLogTab() {
             </DatePickerCell>
           </div>
           <div className="flex items-center gap-1.5">
-            <label
-              htmlFor="audit-date-to"
-              className="text-xs text-(--cui-color-text-muted)"
-            >
+            <label htmlFor="audit-date-to" className="text-xs text-(--cui-color-text-muted)">
               {localize('com_audit_date_to')}
             </label>
             <DatePickerCell resetKey={dateResetNonce} inputId="audit-date-to">
@@ -657,7 +651,8 @@ function AuditLogTableRow({
   onKeyDown: (e: React.KeyboardEvent<HTMLTableRowElement>) => void;
   localize: ReturnType<typeof useLocalize>;
 }) {
-  const targetConfig = getScopeTypeConfig(entry.targetPrincipalType);
+  const targetConfig = getScopeTypeConfig(entry.target.type as PrincipalType);
+  const capability = auditCapability(entry);
   return (
     <tr
       role="button"
@@ -689,20 +684,22 @@ function AuditLogTableRow({
               </span>
             }
           />
-          <span className="text-(--cui-color-text-default)">{entry.targetName}</span>
+          <span className="text-(--cui-color-text-default)">
+            {entry.target.name ?? entry.target.id}
+          </span>
         </span>
       </td>
       <td className="px-4 py-3">
         <div className="flex flex-col">
           <span className="text-(--cui-color-text-default)">
-            {capabilityLabel(entry.capability, localize)}
+            {capabilityLabel(capability, localize)}
           </span>
           <span aria-hidden="true" className="text-[10px] text-(--cui-color-text-muted)">
-            {entry.capability}
+            {capability}
           </span>
         </div>
       </td>
-      <td className="px-4 py-3 font-medium text-(--cui-color-text-default)">{entry.actorName}</td>
+      <td className="px-4 py-3 font-medium text-(--cui-color-text-default)">{entry.actor.name}</td>
       <td className="px-4 py-3 text-xs whitespace-nowrap text-(--cui-color-text-muted)">
         <time dateTime={entry.timestamp}>{formatTimestamp(entry.timestamp)}</time>
       </td>

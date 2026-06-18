@@ -129,7 +129,6 @@ function inferRecordKVTypes(schema: t.ZodSchemaLike): t.KVValueType[] | undefine
   return types.size > 0 ? [...types] : undefined;
 }
 
-
 /** Merges fields from union object variants into a single list.
  *  When the same key appears in multiple variants with different literal
  *  types, the literals are combined into a union(literal(...) | literal(...))
@@ -607,7 +606,21 @@ export const parseImportedYaml = createServerFn({ method: 'POST' })
 
     try {
       const appConfig = await AppService({ config: result.data });
-      return { success: true, error: undefined, validationErrors: undefined, appConfig };
+      /**
+       * `AppService` now returns the resolved `AppConfig` wrapper (e.g.
+       * `interfaceConfig`/`mcpConfig`) rather than the raw config shape. Both
+       * success branches are normalized to a plain config record at the wire
+       * boundary so the `createServerFn` return union stays consistent;
+       * `normalizeImportConfig` on the client already reads either shape. The
+       * value type is `NonNullable<unknown>` (≡ `{}`) because `createServerFn`'s
+       * serialized-response type rejects `unknown` (nullish) index values.
+       */
+      return {
+        success: true,
+        error: undefined,
+        validationErrors: undefined,
+        appConfig: appConfig as unknown as Record<string, NonNullable<unknown>>,
+      };
     } catch (appServiceError) {
       console.warn(
         'AppService failed for imported config, falling back to raw config:',
@@ -618,7 +631,7 @@ export const parseImportedYaml = createServerFn({ method: 'POST' })
         success: true,
         error: undefined,
         validationErrors: undefined,
-        appConfig: fallbackConfig,
+        appConfig: fallbackConfig as unknown as Record<string, NonNullable<unknown>>,
       };
     }
   });
@@ -833,7 +846,10 @@ async function mergeIndexedArrayEntries(
     const segments = arrayPath.split('.');
     let current: unknown = baseConfig;
     for (const seg of segments) {
-      if (current == null || typeof current !== 'object') { current = undefined; break; }
+      if (current == null || typeof current !== 'object') {
+        current = undefined;
+        break;
+      }
       current = (current as Record<string, unknown>)[seg];
     }
     const arr = Array.isArray(current) ? [...current] : [];

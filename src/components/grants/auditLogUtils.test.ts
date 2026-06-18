@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   ACTION_BADGE_STATE,
+  auditCapability,
   capabilityLabel,
   dateToIsoDate,
   formatTimestamp,
@@ -12,8 +13,19 @@ const identityLocalize = (k: string) => k;
 
 describe('ACTION_BADGE_STATE', () => {
   it('maps each audit action to a badge state', () => {
-    expect(ACTION_BADGE_STATE.grant_assigned).toBe('success');
-    expect(ACTION_BADGE_STATE.grant_removed).toBe('danger');
+    expect(ACTION_BADGE_STATE['grant.assigned']).toBe('success');
+    expect(ACTION_BADGE_STATE['grant.removed']).toBe('danger');
+  });
+});
+
+describe('auditCapability', () => {
+  it('reads the capability from metadata', () => {
+    expect(auditCapability({ metadata: { capability: 'manage:users' } })).toBe('manage:users');
+  });
+
+  it('returns empty string when metadata or capability is absent', () => {
+    expect(auditCapability({ metadata: undefined })).toBe('');
+    expect(auditCapability({ metadata: { other: 'x' } })).toBe('');
   });
 });
 

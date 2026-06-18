@@ -11,6 +11,13 @@ import { queryOptions } from '@tanstack/react-query';
 import { createServerFn } from '@tanstack/react-start';
 import { PrincipalType } from 'librechat-data-provider';
 import { hasImpliedCapability, SystemCapabilities } from '@librechat/data-schemas/capabilities';
+import {
+  AUDIT_ACTIONS,
+  AUDIT_CATEGORIES,
+  AUDIT_OUTCOMES,
+  AUDIT_SEVERITIES,
+  AUDIT_ACTOR_TYPES,
+} from '@librechat/data-schemas';
 import type { AdminSystemGrant } from '@librechat/data-schemas';
 import { READ_AUDIT_LOG_CAPABILITY } from '@/constants';
 import { apiFetch, extractApiError } from './utils/api';
@@ -231,41 +238,73 @@ export const revokeCapabilityFn = createServerFn({ method: 'POST' })
 
 const isoDate = z
   .string()
-  .regex(/^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?Z?)?$/, 'Expected ISO 8601 date');
+  .regex(
+    /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:\d{2}))?$/,
+    'Expected ISO 8601 date',
+  );
 
 /**
- * Wire format for `/api/admin/audit-log` filters. `actorQuery` /
- * `targetQuery` are the canonical substring-match parameters on the backend;
- * the legacy `actorId` / `targetPrincipalId` names are accepted there as
- * deprecated aliases that log a warning on every use and will be removed in
- * a future release. Using the canonical names here keeps the BFF off that
- * deprecation path. The UI state variable + label naming stays unchanged
- * because they are not wire format.
+ * Wire format for `/api/admin/audit-log` filters, mirroring the LibreChat
+ * backend's general-purpose audit query. `actorQuery` / `targetQuery` are
+ * case-insensitive substring matches on the denormalized actor/target names;
+ * `category` / `action` / `outcome` / `severity` / `actorType` / `targetType`
+ * are exact facet filters. `cursor` (the `seq` of the last row seen) drives
+ * keyset pagination; `offset` remains for page-number navigation.
  */
 const auditFilterSchema = z.object({
   search: z.string().max(200).optional(),
-  action: z.array(z.enum(['grant_assigned', 'grant_removed'])).optional(),
-  from: isoDate.optional(),
-  to: isoDate.optional(),
+  category: z.array(z.enum(AUDIT_CATEGORIES)).optional(),
+  action: z.array(z.enum(AUDIT_ACTIONS)).optional(),
+  outcome: z.array(z.enum(AUDIT_OUTCOMES)).optional(),
+  severity: z.array(z.enum(AUDIT_SEVERITIES)).optional(),
+  actorType: z.enum(AUDIT_ACTOR_TYPES).optional(),
   actorQuery: z.string().max(128).optional(),
-  targetPrincipalType: z.nativeEnum(PrincipalType).optional(),
+  targetType: z.string().max(128).optional(),
   targetQuery: z.string().max(128).optional(),
   capability: z.string().max(128).optional(),
+  from: isoDate.optional(),
+  to: isoDate.optional(),
   offset: z.number().int().min(0).optional(),
   limit: z.number().int().min(1).max(500).optional(),
+  cursor: z.number().int().min(1).optional(),
 });
 
 export type AuditFilters = z.infer<typeof auditFilterSchema>;
 
 const adminAuditLogEntrySchema = z.object({
   id: z.string(),
-  action: z.enum(['grant_assigned', 'grant_removed']),
-  actorId: z.string(),
-  actorName: z.string(),
-  targetPrincipalType: z.nativeEnum(PrincipalType),
-  targetPrincipalId: z.string(),
-  targetName: z.string(),
-  capability: z.string(),
+  schemaVersion: z.number(),
+  category: z.enum(AUDIT_CATEGORIES),
+  action: z.enum(AUDIT_ACTIONS),
+  outcome: z.enum(AUDIT_OUTCOMES),
+  severity: z.enum(AUDIT_SEVERITIES),
+  actor: z.object({
+    type: z.enum(AUDIT_ACTOR_TYPES),
+    id: z.string().optional(),
+    name: z.string(),
+  }),
+  target: z.object({
+    type: z.string(),
+    id: z.string().optional(),
+    name: z.string().optional(),
+  }),
+  metadata: z
+    .record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()]))
+    .optional(),
+  context: z
+    .object({
+      requestId: z.string().optional(),
+      ip: z.string().optional(),
+      userAgent: z.string().optional(),
+      sessionId: z.string().optional(),
+    })
+    .optional(),
+  tenantId: z.string().optional(),
+  integrity: z.object({
+    seq: z.number(),
+    hash: z.string(),
+    prevHash: z.string(),
+  }),
   timestamp: z.string(),
   before: z.array(z.string()).optional(),
   after: z.array(z.string()).optional(),
@@ -274,6 +313,7 @@ const adminAuditLogEntrySchema = z.object({
 const auditLogPageResponseSchema = z.object({
   entries: z.array(adminAuditLogEntrySchema),
   total: z.number().int().min(0),
+  nextCursor: z.number().int().nullable(),
 });
 
 export type AuditLogPage = z.infer<typeof auditLogPageResponseSchema>;

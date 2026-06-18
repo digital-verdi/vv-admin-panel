@@ -1,13 +1,20 @@
-import type { AuditAction } from '@librechat/data-schemas';
+import type { AdminAuditLogEntry, AuditAction } from '@librechat/data-schemas';
+
+/** The capability a grant entry concerns now lives in `metadata.capability`
+ * (other event categories omit it). Returns '' when absent or non-string. */
+export function auditCapability(entry: Pick<AdminAuditLogEntry, 'metadata'>): string {
+  const cap = entry.metadata?.capability;
+  return typeof cap === 'string' ? cap : '';
+}
 
 export const ACTION_BADGE_STATE: Record<AuditAction, 'success' | 'danger'> = {
-  grant_assigned: 'success',
-  grant_removed: 'danger',
+  'grant.assigned': 'success',
+  'grant.removed': 'danger',
 };
 
 export const ACTION_LABEL_KEY: Record<AuditAction, string> = {
-  grant_assigned: 'com_audit_action_assigned',
-  grant_removed: 'com_audit_action_removed',
+  'grant.assigned': 'com_audit_action_assigned',
+  'grant.removed': 'com_audit_action_removed',
 };
 
 /** Parse a `YYYY-MM-DD` filter value as a local-time date so the DatePicker
@@ -23,11 +30,7 @@ export function isoDateToDate(iso: string): Date | undefined {
   const day = Number(match[3]);
   const date = new Date(year, month - 1, day);
   if (Number.isNaN(date.getTime())) return undefined;
-  if (
-    date.getFullYear() !== year ||
-    date.getMonth() !== month - 1 ||
-    date.getDate() !== day
-  ) {
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
     return undefined;
   }
   return date;
@@ -44,10 +47,7 @@ export function dateToIsoDate(date: Date): string {
  * (inclusive) or end (inclusive, millisecond-precise) of that local-time day.
  * Mixing local-day pick-list values with UTC midnight (the prior behaviour)
  * caused off-by-one filtering for any non-UTC user. */
-export function localDayBoundaryIso(
-  iso: string,
-  boundary: 'start' | 'end',
-): string | undefined {
+export function localDayBoundaryIso(iso: string, boundary: 'start' | 'end'): string | undefined {
   const date = isoDateToDate(iso);
   if (!date) return undefined;
   if (boundary === 'end') date.setHours(23, 59, 59, 999);

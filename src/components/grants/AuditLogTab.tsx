@@ -278,8 +278,13 @@ export function AuditLogTab() {
 
   const selectedEntry: t.AuditLogEntryWithDiff | null =
     entryOnPage ?? entryFetch.data?.entry ?? null;
+  /** A malformed `entryId` never fetches (guarded above), so treat it as
+   * not-found rather than leaving the drawer to latch a previously-opened
+   * entry under the bad permalink. */
   const entryNotFound =
-    !!entryId && !entryOnPage && entryFetch.isSuccess && entryFetch.data?.entry === null;
+    !!entryId &&
+    !entryOnPage &&
+    (!isAuditEntryId(entryId) || (entryFetch.isSuccess && entryFetch.data?.entry === null));
 
   const openEntry = useCallback(
     (id: string) => {

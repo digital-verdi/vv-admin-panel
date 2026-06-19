@@ -109,6 +109,7 @@ export function EditCapabilitiesDialog({
                 <Badge
                   size="sm"
                   state="neutral"
+                  className={principalConfig.badgeClass}
                   text={
                     <span className="inline-flex items-center gap-1">
                       <Icon name={principalConfig.icon} size="xs" />

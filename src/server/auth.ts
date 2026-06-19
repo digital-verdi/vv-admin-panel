@@ -287,17 +287,24 @@ export const requireAuthFn = createServerFn({ method: 'GET' })
     };
   });
 
+const logoutResponseSchema = z.object({ redirect: z.string().optional() });
+
 export const adminLogoutFn = createServerFn({ method: 'POST' }).handler(async () => {
   try {
     const session = await useAppSession();
     const token = session.data.token;
 
+    let redirect: string | undefined;
     if (token) {
       try {
-        await fetch(`${getServerApiUrl()}/api/auth/logout`, {
+        const response = await fetch(`${getServerApiUrl()}/api/auth/logout`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` },
         });
+        const parsed = logoutResponseSchema.safeParse(await response.json().catch(() => ({})));
+        if (parsed.success) {
+          redirect = parsed.data.redirect;
+        }
       } catch {
         // Ignore remote logout errors
       }
@@ -305,7 +312,7 @@ export const adminLogoutFn = createServerFn({ method: 'POST' }).handler(async ()
 
     await clearSession(session);
 
-    return { error: false };
+    return { error: false, redirect };
   } catch (error) {
     console.error('Admin logout error:', error);
     return { error: true, message: 'Logout failed' };
@@ -328,6 +335,9 @@ export const openIdCheckOptions = queryOptions({
 });
 
 export const checkOpenIdFn = createServerFn({ method: 'GET' }).handler(async () => {
+  if (process.env.ADMIN_SSO_ENABLED === 'false') {
+    return { available: false, ssoOnly: false };
+  }
   const checkUrl = `${getServerApiUrl()}/api/admin/oauth/openid/check`;
   try {
     const response = await fetch(checkUrl);
@@ -347,13 +357,10 @@ export const openidLoginFn = createServerFn({ method: 'GET' }).handler(async () 
   try {
     const baseUrl = getApiBaseUrl();
     const authUrl = new URL(`${baseUrl}/api/admin/oauth/openid`);
-    const requestOrigin = getRequestOrigin();
 
     const codeVerifier = crypto.randomBytes(32).toString('hex');
     const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('hex');
     authUrl.searchParams.set('code_challenge', codeChallenge);
-    if (requestOrigin)
-      authUrl.searchParams.set('redirect_uri', `${requestOrigin}/auth/openid/callback`);
 
     const session = await useAppSession();
     await session.update({ codeVerifier });

@@ -402,6 +402,51 @@ export const removeFieldProfileValueFn = createServerFn({ method: 'POST' })
   );
 
 /**
+ * Suppress an inherited field value for a specific scope.
+ */
+export const tombstoneFieldProfileValueFn = createServerFn({ method: 'POST' })
+  .inputValidator(
+    z.object({
+      fieldPath: safeFieldPath,
+      principalType: z.nativeEnum(PrincipalType),
+      principalId: z.string(),
+    }),
+  )
+  .handler(
+    async ({
+      data,
+    }: {
+      data: {
+        fieldPath: string;
+        principalType: PrincipalType;
+        principalId: string;
+      };
+    }) => {
+      if (isInterfacePermissionPath(data.fieldPath)) return { success: true };
+      await requireAnyCapability([
+        SystemCapabilities.ASSIGN_CONFIGS,
+        SystemCapabilities.MANAGE_CONFIGS,
+      ]);
+      const apiType = data.principalType;
+      const response = await apiFetch(
+        `/api/admin/config/${apiType}/${encodeURIComponent(data.principalId)}/fields/tombstone`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ fieldPath: data.fieldPath }),
+        },
+      );
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(
+          (err as { error?: string }).error ?? `Failed to tombstone field: ${response.status}`,
+        );
+      }
+      return { success: true };
+    },
+  );
+
+/**
  * Toggle a scope's isActive flag.
  */
 export const toggleScopeActiveFn = createServerFn({ method: 'POST' })

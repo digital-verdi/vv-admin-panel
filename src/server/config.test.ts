@@ -621,6 +621,92 @@ describe('validateFieldValue', () => {
     const result = validateFieldValue('interface', { privacyPolicy: {} });
     expect(result).toBeDefined();
   });
+
+  it('accepts streamable-http type for MCP server', () => {
+    expect(validateFieldValue('mcpServers.foo.type', 'streamable-http')).toEqual({ success: true });
+  });
+
+  it('accepts http type for MCP server', () => {
+    expect(validateFieldValue('mcpServers.foo.type', 'http')).toEqual({ success: true });
+  });
+
+  it('accepts stdio type for MCP server', () => {
+    expect(validateFieldValue('mcpServers.foo.type', 'stdio')).toEqual({ success: true });
+  });
+
+  it('rejects unknown type for MCP server', () => {
+    const result = validateFieldValue('mcpServers.foo.type', 'made-up-transport');
+    expect(result.success).toBe(false);
+  });
+
+  it('returns the most-specific branch on union failure (anyOfSchema heuristic)', () => {
+    const result = validateFieldValue('mcpServers.foo.type', 'made-up-transport');
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const semicolonSplits = result.error.split(';');
+      expect(semicolonSplits.length).toBeLessThanOrEqual(2);
+      expect(result.error.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('accepts https URL for MCP server (matches sse/streamable-http branches)', () => {
+    expect(validateFieldValue('mcpServers.foo.url', 'https://example.com/mcp')).toEqual({
+      success: true,
+    });
+  });
+
+  it('accepts ws URL for MCP server (matches websocket branch)', () => {
+    expect(validateFieldValue('mcpServers.foo.url', 'wss://example.com/mcp')).toEqual({
+      success: true,
+    });
+  });
+
+  it('rejects non-URL value for MCP server', () => {
+    const result = validateFieldValue('mcpServers.foo.url', 'not a url');
+    expect(result.success).toBe(false);
+  });
+
+  it('returns a single-branch error on union URL failure, not a concatenated dump', () => {
+    const result = validateFieldValue('mcpServers.foo.url', 'not a url');
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const semicolonSplits = result.error.split(';');
+      expect(semicolonSplits.length).toBeLessThanOrEqual(2);
+      expect(result.error.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('validates a nested field reached through a union (header value must be string)', () => {
+    expect(
+      validateFieldValue('mcpServers.foo.headers.Authorization', 'Bearer xyz'),
+    ).toEqual({ success: true });
+    const bad = validateFieldValue('mcpServers.foo.headers.Authorization', 42);
+    expect(bad.success).toBe(false);
+  });
+});
+
+/* ---------------------------------------------------------------------------
+ * Regression — resolveSubSchema must keep walking through synthetic unions.
+ * The anyOfSchema wrapper used to drop _def.options, so the second segment
+ * after a multi-candidate union could not be resolved and validateFieldValue
+ * silently passed everything under unioned objects.
+ * -----------------------------------------------------------------------*/
+
+describe('resolveSubSchema — traversal through synthesized union', () => {
+  it('walks into a nested field after a union with multiple candidates', () => {
+    const schema = z3.object({
+      payload: z3.union([
+        z3.object({ headers: z3.record(z3.string(), z3.string()) }),
+        z3.object({ headers: z3.record(z3.string(), z3.string()) }),
+      ]),
+    });
+    const sub = resolveSubSchema(schema, ['payload', 'headers', 'Authorization']);
+    expect(sub).not.toBeNull();
+    const safeParse = (sub as { safeParse?: (v: unknown) => { success: boolean } }).safeParse;
+    expect(typeof safeParse).toBe('function');
+    expect(safeParse!('Bearer xyz').success).toBe(true);
+    expect(safeParse!(42).success).toBe(false);
+  });
 });
 
 /* ---------------------------------------------------------------------------
@@ -645,6 +731,10 @@ const SAMPLE_OVERRIDES: Record<string, unknown> = {
   'endpoints.agents.remoteApi.auth.oidc.issuer': 'https://example.com',
   'endpoints.agents.remoteApi.auth.oidc.jwksUri': 'https://example.com/.well-known/jwks.json',
   'summarization.trigger': { type: 'token_ratio', value: 0.5 },
+  'skillSync.github.intervalMinutes': 5,
+  'skillSync.github.sources': [
+    { id: 'sample', owner: 'foo', repo: 'bar', paths: ['skills/'], credentialKey: 'sample-key' },
+  ],
 };
 
 /** Generates a representative value that a given UI control would produce. */
@@ -871,9 +961,8 @@ describe('YAML-editor fallback audit', () => {
  * Custom endpoint validation and schema extraction
  * -----------------------------------------------------------------------*/
 
-const ldpEndpoint = (
-  require3('librechat-data-provider') as { endpointSchema: ZodV3Schema }
-).endpointSchema;
+const ldpEndpoint = (require3('librechat-data-provider') as { endpointSchema: ZodV3Schema })
+  .endpointSchema;
 
 describe('custom endpoint schema', () => {
   const endpointTree = extractSchemaTree(ldpEndpoint);

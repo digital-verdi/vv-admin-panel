@@ -7,6 +7,7 @@ import { queryOptions, useQuery, useQueryClient, useMutation } from '@tanstack/r
 import type * as t from '@/types';
 import {
   removeFieldProfileValueFn,
+  tombstoneFieldProfileValueFn,
   bulkSaveProfileValuesFn,
   getBatchFieldProfilesFn,
   availableScopesOptions,
@@ -21,13 +22,16 @@ import {
   unflattenObject,
   serializeKVPairs,
   deepSerializeKVPairs,
-  cn,
   normalizeImportConfig,
   hasConfigCapability,
   getTabsWithPermission,
+  notifySuccess,
+  notifyError,
 } from '@/utils';
 import { useLocalize, useHighlightRef, useActiveSection, useCapabilities } from '@/hooks';
 import { CONFIG_TABS, OTHER_TAB, SECTION_META, HIDDEN_SECTIONS } from './configMeta';
+import { mergeIndexedArrayEdits, partitionScopeResetPaths } from './utils';
+import { validateMcpCrossField } from './sections/McpServersRenderer';
 import { ScopeSelector, ScopeTriggerButton } from './ScopeSelector';
 import { ConfigTableOfContents } from './ConfigTableOfContents';
 import { ConfirmSaveDialog } from './ConfirmSaveDialog';
@@ -35,7 +39,6 @@ import { StickyActionBar } from '@/components/shared';
 import { ConfigTabContent } from './ConfigTabContent';
 import { ImportYamlDialog } from './ImportYamlDialog';
 import { ContentToolbar } from './ContentToolbar';
-import { mergeIndexedArrayEdits } from './utils';
 import { SystemCapabilities } from '@/constants';
 import { ConfigTabBar } from './ConfigTabBar';
 import { InfoBanner } from './InfoBanner';
@@ -130,6 +133,15 @@ export function ConfigPage({ initialTab, highlightField, initialScope }: t.Confi
     return new Set(Object.keys(flattenObject(dbOverrides)));
   }, [dbOverrides]);
 
+  const baseRecordKeys = useMemo(() => {
+    const result: Record<string, Set<string>> = {};
+    const yamlMcpKeys = baseConfigData?.yamlMcpKeys;
+    if (yamlMcpKeys && Array.isArray(yamlMcpKeys)) {
+      result.mcpServers = new Set(yamlMcpKeys);
+    }
+    return result;
+  }, [baseConfigData]);
+
   const hasUnmappedSections = useMemo(
     () =>
       schemaTree.some(
@@ -181,18 +193,6 @@ export function ConfigPage({ initialTab, highlightField, initialScope }: t.Confi
   const [importSuccess, setImportSuccess] = useState(false);
   const dismissTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => clearTimeout(dismissTimer.current), []);
-
-  const [toast, setToast] = useState<t.ToastState>(null);
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  useEffect(() => () => clearTimeout(toastTimer.current), []);
-
-  const showToast = useCallback((state: t.ToastState, autoHideMs?: number) => {
-    setToast(state);
-    clearTimeout(toastTimer.current);
-    if (autoHideMs) {
-      toastTimer.current = setTimeout(() => setToast(null), autoHideMs);
-    }
-  }, []);
 
   const [showConfiguredOnly, setShowConfiguredOnly] = useState(false);
 
@@ -344,41 +344,93 @@ export function ConfigPage({ initialTab, highlightField, initialScope }: t.Confi
     return scopeResolvedValues ?? {};
   }, [isEditingScope, flatBaseline, scopeResolvedValues]);
 
+  /** Container paths inferred from leaf baselines, used to tell apart subtree-deletes from no-op writes. */
+  const baselineIntermediates = useMemo(() => {
+    const set = new Set<string>();
+    for (const leaf of Object.keys(scopeBaseline)) {
+      const parts = leaf.split('.');
+      for (let i = 1; i < parts.length; i++) {
+        set.add(parts.slice(0, i).join('.'));
+      }
+    }
+    return set;
+  }, [scopeBaseline]);
+
+  /** Container paths walked directly off the structured config, so an orphaned `{}` entry whose flatten dropped (or never produced) any leaf is still recognized as a real subtree-delete target. */
+  const baselineContainerPaths = useMemo(() => {
+    const set = new Set<string>();
+    const walk = (obj: unknown, prefix: string): void => {
+      if (obj == null || typeof obj !== 'object' || Array.isArray(obj)) return;
+      for (const k of Object.keys(obj as Record<string, unknown>)) {
+        const path = prefix ? `${prefix}.${k}` : k;
+        const v = (obj as Record<string, unknown>)[k];
+        if (v !== null && typeof v === 'object' && !Array.isArray(v)) {
+          set.add(path);
+          walk(v, path);
+        }
+      }
+    };
+    walk(baseActiveConfigValues, '');
+    return set;
+  }, [baseActiveConfigValues]);
+
   const handleFieldChange = useCallback(
     (path: string, value: t.ConfigValue) => {
-      startTransition(() => {
-        setTouchedPaths((prev) => {
-          if (prev.has(path)) return prev;
-          const next = new Set(prev);
-          next.add(path);
-          return next;
-        });
-        setEditedValues((prev) => {
-          const baseline = scopeBaseline[path];
-          const match =
-            value === baseline ||
-            (typeof value === 'object' &&
-              typeof baseline === 'object' &&
-              JSON.stringify(value) === JSON.stringify(baseline));
-          if (match) {
-            const next = { ...prev };
-            delete next[path];
-            return next;
+      setTouchedPaths((prev) => {
+        if (prev.has(path)) return prev;
+        const next = new Set(prev);
+        next.add(path);
+        return next;
+      });
+      setEditedValues((prev) => {
+        const baseline = scopeBaseline[path];
+        const match =
+          value === baseline ||
+          (typeof value === 'object' &&
+            typeof baseline === 'object' &&
+            JSON.stringify(value) === JSON.stringify(baseline));
+        /** A container-path undefined write must survive; baseline only stores leaves, so it would otherwise match `undefined === undefined` and get pruned. baselineContainerPaths catches the orphaned empty-object case where leaf-derived intermediates miss the entry. */
+        const isContainerDelete =
+          value === undefined &&
+          (baselineIntermediates.has(path) || baselineContainerPaths.has(path));
+        /** When the user deleted a container entry and is now writing descendants under it (delete-then-recreate of an MCP server), the new leaf must persist even if it matches baseline so the post-DELETE recreate is not missing required fields, and the ancestor-undefined must outlive the descendant write so handleConfirmSave can DELETE the entry before PATCHing the new leaves. Walk ancestors directly instead of scanning every pending edit; rename/remove emit one onChange per leaf and the prior O(n)-per-call scan compounded to O(n*m) work per event. */
+        const hasPendingAncestorDelete = (() => {
+          let lastDot = path.lastIndexOf('.');
+          while (lastDot > 0) {
+            const ancestor = path.slice(0, lastDot);
+            if (ancestor in prev && prev[ancestor] === undefined) return true;
+            lastDot = ancestor.lastIndexOf('.');
           }
-          const next = { ...prev, [path]: value };
-          if (Array.isArray(value)) {
-            const prefix = `${path}.`;
-            for (const k of Object.keys(next)) {
-              if (k.startsWith(prefix) && /\.\d+$/.test(k)) delete next[k];
-            }
-          }
-          const indexMatch = /^(.+)\.\d+$/.exec(path);
-          if (indexMatch) delete next[indexMatch[1]];
+          return false;
+        })();
+        if (match && !isContainerDelete && !hasPendingAncestorDelete) {
+          const next = { ...prev };
+          delete next[path];
           return next;
-        });
+        }
+        const next = { ...prev, [path]: value };
+        if (Array.isArray(value)) {
+          const prefix = `${path}.`;
+          for (const k of Object.keys(next)) {
+            if (k.startsWith(prefix) && /\.\d+$/.test(k)) delete next[k];
+          }
+        }
+        const indexMatch = /^(.+)\.\d+$/.exec(path);
+        if (indexMatch) delete next[indexMatch[1]];
+        /** Two-way dedup: drop ancestors that the new leaf supersedes AND descendants that the new parent supersedes. An ancestor whose value is `undefined` expresses "delete this whole subtree" and must outlive subsequent descendant writes so DELETE-then-PATCH ordering at save time can fully replace the entry instead of leaking stale fields. */
+        for (const existing of Object.keys(next)) {
+          if (existing === path) continue;
+          const newIsDescendant = path.startsWith(`${existing}.`);
+          const newIsAncestor = existing.startsWith(`${path}.`);
+          if (newIsDescendant && next[existing] === undefined) continue;
+          if (newIsDescendant || newIsAncestor) {
+            delete next[existing];
+          }
+        }
+        return next;
       });
     },
-    [scopeBaseline],
+    [scopeBaseline, baselineIntermediates, baselineContainerPaths],
   );
 
   const isDirty = Object.keys(editedValues).length > 0;
@@ -414,8 +466,8 @@ export function ConfigPage({ initialTab, highlightField, initialScope }: t.Confi
     setConfirmSaveOpen(false);
     setSaving(false);
     setSaveError(null);
-    showToast({ type: 'saved' }, 3000);
-  }, [showToast]);
+    notifySuccess(localize('com_config_saved'));
+  }, [localize]);
 
   const invalidateAndResetBase = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['baseConfig'] });
@@ -431,8 +483,7 @@ export function ConfigPage({ initialTab, highlightField, initialScope }: t.Confi
 
   const importMutation = useMutation({
     mutationFn: (config: Record<string, t.ConfigValue>) => importBaseConfigFn({ data: { config } }),
-    onMutate: () => showToast({ type: 'saving' }),
-    onError: (err: Error) => showToast({ type: 'error', message: err.message }, 5000),
+    onError: (err: Error) => notifyError(err.message),
     onSuccess: invalidateAndResetBase,
   });
 
@@ -453,54 +504,108 @@ export function ConfigPage({ initialTab, highlightField, initialScope }: t.Confi
     const touched = [...touchedPaths].filter((p) => p in editedValues);
     if (touched.length === 0) return;
 
+    /** Per-leaf saves can land an MCP entry in a transport state whose required siblings are missing (e.g. type=stdio with no command/args). Server-side per-field validation only sees one path at a time, so do the cross-field check here against the merged effective entry before any PATCH fires. Use baseActiveConfigValues so scope-mode edits validate against the scope-resolved baseline (where prior scope overrides supply some required fields) instead of the base config alone. */
+    const mcpBaseline = (() => {
+      const v = baseActiveConfigValues?.mcpServers;
+      if (v && typeof v === 'object' && !Array.isArray(v)) {
+        return v as Record<string, t.ConfigValue>;
+      }
+      return {};
+    })();
+    const mcpEdits: Array<[string, t.ConfigValue]> = touched
+      .filter((p) => p.startsWith('mcpServers.'))
+      .map((p) => [p, editedValues[p]] as [string, t.ConfigValue]);
+    /** A leaf reset (undefined write) removes the override and reveals the value of the next-lower layer. In scope mode that next layer is the base config; in base mode it is the un-merged YAML config (the baseOnly response). Feed whichever layer applies as the resetFallback so the cross-field validator does not falsely flag a reset-but-still-valid field as missing. */
+    const mcpResetFallback = (() => {
+      const source = isEditingScope ? configValues?.mcpServers : baseConfigData?.yamlMcpServers;
+      if (source && typeof source === 'object' && !Array.isArray(source)) {
+        return source as Record<string, t.ConfigValue>;
+      }
+      return undefined;
+    })();
+    if (mcpEdits.length > 0) {
+      const mcpErrors = validateMcpCrossField(mcpBaseline, mcpEdits, mcpResetFallback);
+      if (mcpErrors.length > 0) {
+        const { entryKey, missingField } = mcpErrors[0];
+        const message = localize('com_config_mcp_invalid_after_edit', {
+          entry: entryKey,
+          field: missingField,
+        });
+        setSaveError(message);
+        notifyError(message);
+        return;
+      }
+    }
+
     const saves = touched
       .filter((p) => editedValues[p] !== undefined)
       .map((p) => ({
         fieldPath: p,
-        value: /\.\d+$/.test(p) ? deepSerializeKVPairs(editedValues[p]) : serializeKVPairs(editedValues[p]),
+        value: /\.\d+$/.test(p)
+          ? deepSerializeKVPairs(editedValues[p])
+          : serializeKVPairs(editedValues[p]),
       }));
     const resets = touched.filter((p) => editedValues[p] === undefined);
+    const inheritedMcpKeys = (() => {
+      const source = isEditingScope ? configValues?.mcpServers : undefined;
+      if (source && typeof source === 'object' && !Array.isArray(source)) {
+        return new Set(Object.keys(source as Record<string, t.ConfigValue>));
+      }
+      return new Set<string>();
+    })();
 
     setSaving(true);
     setSaveError(null);
-    showToast({ type: 'saving' });
 
     try {
-      const promises: Promise<unknown>[] = [];
+      /** Resets must land before saves so a delete-then-recreate at the same path (e.g. MCP entry replaced with different fields) wipes stale fields first and the new leaf PATCHes don't race against the DELETE. */
+      if (resets.length > 0) {
+        const resetPromises = isEditingScope
+          ? (() => {
+              const { resetPaths, tombstonePaths } = partitionScopeResetPaths(
+                resets,
+                inheritedMcpKeys,
+              );
+              return [
+                ...resetPaths.map((fieldPath) =>
+                  removeFieldProfileValueFn({
+                    data: {
+                      fieldPath,
+                      principalType: editingScope!.principalType,
+                      principalId: editingScope!.principalId,
+                    },
+                  }),
+                ),
+                ...tombstonePaths.map((fieldPath) =>
+                  tombstoneFieldProfileValueFn({
+                    data: {
+                      fieldPath,
+                      principalType: editingScope!.principalType,
+                      principalId: editingScope!.principalId,
+                    },
+                  }),
+                ),
+              ];
+            })()
+          : resets.map((fieldPath) => resetBaseConfigFieldFn({ data: { fieldPath } }));
+        if (resetPromises.length > 0) {
+          await Promise.all(resetPromises);
+        }
+      }
 
       if (saves.length > 0) {
         if (isEditingScope) {
-          promises.push(
-            bulkSaveProfileValuesFn({
-              data: {
-                principalType: editingScope!.principalType,
-                principalId: editingScope!.principalId,
-                entries: saves,
-              },
-            }),
-          );
+          await bulkSaveProfileValuesFn({
+            data: {
+              principalType: editingScope!.principalType,
+              principalId: editingScope!.principalId,
+              entries: saves,
+            },
+          });
         } else {
-          promises.push(saveBaseConfigFn({ data: { entries: saves } }));
+          await saveBaseConfigFn({ data: { entries: saves } });
         }
       }
-
-      for (const fieldPath of resets) {
-        if (isEditingScope) {
-          promises.push(
-            removeFieldProfileValueFn({
-              data: {
-                fieldPath,
-                principalType: editingScope!.principalType,
-                principalId: editingScope!.principalId,
-              },
-            }),
-          );
-        } else {
-          promises.push(resetBaseConfigFieldFn({ data: { fieldPath } }));
-        }
-      }
-
-      await Promise.all(promises);
 
       if (isEditingScope) {
         invalidateAndResetScope();
@@ -511,17 +616,20 @@ export function ConfigPage({ initialTab, highlightField, initialScope }: t.Confi
       const message = err instanceof Error ? err.message : String(err);
       setSaving(false);
       setSaveError(message);
-      showToast({ type: 'error', message }, 5000);
+      notifyError(message);
     }
   }, [
     touchedPaths,
     editedValues,
-    isEditingScope,
-    editingScope,
-    showToast,
-    invalidateAndResetBase,
-    invalidateAndResetScope,
     saving,
+    isEditingScope,
+    baseActiveConfigValues,
+    configValues,
+    baseConfigData,
+    localize,
+    editingScope,
+    invalidateAndResetScope,
+    invalidateAndResetBase,
   ]);
 
   const serializedEditedValues = useMemo(() => {
@@ -540,7 +648,10 @@ export function ConfigPage({ initialTab, highlightField, initialScope }: t.Confi
       const segments = path.split('.');
       let current: t.ConfigValue = configValues;
       for (const seg of segments) {
-        if (current == null || typeof current !== 'object') { current = undefined; break; }
+        if (current == null || typeof current !== 'object') {
+          current = undefined;
+          break;
+        }
         current = Array.isArray(current)
           ? (current as t.ConfigValue[])[Number(seg)]
           : (current as Record<string, t.ConfigValue>)[seg];
@@ -593,7 +704,7 @@ export function ConfigPage({ initialTab, highlightField, initialScope }: t.Confi
       const normalized = normalizeImportConfig(appConfig);
       if (isEditingScope && editingScope) {
         handleImportAsProfile(normalized, editingScope).catch((err: Error) => {
-          showToast({ type: 'error', message: err.message }, 5000);
+          notifyError(err.message);
         });
       } else {
         importMutation.mutate(normalized, { onSuccess: () => showImportSuccess() });
@@ -827,6 +938,9 @@ export function ConfigPage({ initialTab, highlightField, initialScope }: t.Confi
               sectionPermissions={sectionPermissions}
               schemaDefaults={schemaDefaults}
               showConfiguredOnly={showConfiguredOnly}
+              isEditingScope={isEditingScope}
+              baseRecordKeys={baseRecordKeys}
+              onValidationError={(message) => notifyError(message)}
             />
           </div>
         </div>
@@ -850,38 +964,6 @@ export function ConfigPage({ initialTab, highlightField, initialScope }: t.Confi
         />
       )}
 
-      {toast &&
-        createPortal(
-          <div
-            className={cn(
-              'config-toast',
-              toast.type === 'saving' && 'config-toast-info',
-              toast.type === 'saved' && 'config-toast-success',
-              toast.type === 'error' && 'config-toast-error',
-            )}
-          >
-            {toast.type === 'saving' && (
-              <>
-                <span className="config-toast-spinner" />
-                {localize('com_config_saving')}
-              </>
-            )}
-            {toast.type === 'saved' && (
-              <>
-                <Icon name="check" size="sm" />
-                {localize('com_config_saved')}
-              </>
-            )}
-            {toast.type === 'error' && (
-              <>
-                <Icon name="warning" size="sm" />
-                {toast.message}
-              </>
-            )}
-          </div>,
-          document.body,
-        )}
-
       <ConfirmSaveDialog
         open={confirmSaveOpen}
         editedValues={serializedEditedValues}
@@ -898,7 +980,7 @@ export function ConfigPage({ initialTab, highlightField, initialScope }: t.Confi
         currentSelection={selectedScope}
         onSelect={handleScopeChange}
         permissions={permissions}
-        onError={(msg) => showToast({ type: 'error', message: msg }, 5000)}
+        onError={(msg) => notifyError(msg)}
       />
 
       <ImportYamlDialog

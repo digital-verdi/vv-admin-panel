@@ -499,7 +499,14 @@ export function ConfigPage({ initialTab, highlightField, initialScope }: t.Confi
     setResetBaseError(null);
     try {
       await resetBaseConfigFn();
-      await queryClient.invalidateQueries({ queryKey: ['baseConfig'] });
+      /** resolvedConfig holds each scope's own overrides (not a base merge), so a
+       *  base reset doesn't make it stale on its own — but base-derived data
+       *  (schemaDefaults, base values used for MCP inheritance) feeds scope mode,
+       *  so flush it too, consistent with how scope saves invalidate. */
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['baseConfig'] }),
+        queryClient.invalidateQueries({ queryKey: ['resolvedConfig'] }),
+      ]);
       setEditedValues({});
       setTouchedPaths(new Set());
       setResettingBase(false);

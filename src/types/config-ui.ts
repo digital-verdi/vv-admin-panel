@@ -158,7 +158,6 @@ export interface DeleteProfileValueModalProps {
 
 export interface ResetBaseConfigDialogProps {
   open: boolean;
-  overrideCount: number;
   resetting: boolean;
   error?: string | null;
   onConfirm: () => void;

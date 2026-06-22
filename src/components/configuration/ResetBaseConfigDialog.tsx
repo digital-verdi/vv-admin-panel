@@ -4,7 +4,6 @@ import { useLocalize } from '@/hooks';
 
 export function ResetBaseConfigDialog({
   open,
-  overrideCount,
   resetting,
   error,
   onConfirm,
@@ -26,11 +25,8 @@ export function ResetBaseConfigDialog({
         className="modal-frost"
       >
         <div className="flex flex-col gap-4">
-          <p className="text-sm text-(--cui-color-text-default)">
-            {localize('com_config_reset_base_confirm', { count: overrideCount })}
-          </p>
-          <p className="text-xs text-(--cui-color-text-muted)">
-            {localize('com_config_reset_base_desc')}
+          <p className="text-sm leading-relaxed text-(--cui-color-text-default)">
+            {localize('com_config_reset_base_confirm')}
           </p>
           {error && (
             <div

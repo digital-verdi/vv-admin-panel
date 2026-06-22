@@ -1033,7 +1033,6 @@ export function ConfigPage({ initialTab, highlightField, initialScope }: t.Confi
 
       <ResetBaseConfigDialog
         open={resetBaseOpen}
-        overrideCount={dbOverridePaths.size}
         resetting={resettingBase}
         error={resetBaseError}
         onConfirm={handleResetBaseConfig}

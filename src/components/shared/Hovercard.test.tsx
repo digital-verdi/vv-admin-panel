@@ -14,6 +14,21 @@ describe('Hovercard', () => {
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
   });
 
+  it('keeps the trigger visible (not the visually-hidden HovercardDisclosure)', () => {
+    render(
+      <Hovercard label="More info" trigger={<span>icon</span>}>
+        Body text
+      </Hovercard>,
+    );
+    const trigger = screen.getByRole('button', { name: 'More info' });
+    // HovercardDisclosure clips its element with these inline styles until the
+    // anchor gets keyboard focus; the trigger must never carry them.
+    const style = trigger.getAttribute('style') ?? '';
+    expect(style).not.toContain('clip');
+    expect(style).not.toContain('position: absolute');
+    expect(trigger).toBeVisible();
+  });
+
   it('does not render card content until opened', () => {
     render(
       <Hovercard label="More info" trigger={<span>icon</span>}>

@@ -5,10 +5,11 @@ import { cn } from '@/utils';
 /**
  * Accessible, click-ui-styled hovercard built on `@ariakit/react`.
  *
- * The trigger is a single focusable button that combines Ariakit's
- * `HovercardAnchor` (reveals the card on hover) and `HovercardDisclosure`
- * (reveals it on keyboard focus / click and exposes `aria-expanded`), so the
- * card is reachable by both pointer and keyboard users.
+ * The trigger is an always-visible `HovercardAnchor` button: pointer users open
+ * it by hovering, and keyboard users open it by focusing the button and pressing
+ * Enter/Space (which toggles the store). `HovercardDisclosure` is intentionally
+ * not used as the trigger — it renders visually hidden until the anchor receives
+ * keyboard focus, which would make an icon-only trigger invisible to mouse users.
  */
 export function Hovercard({
   trigger,
@@ -20,27 +21,30 @@ export function Hovercard({
   triggerClassName,
   className,
 }: t.HovercardProps) {
+  const store = Ariakit.useHovercardStore({ placement, showTimeout: 150, hideTimeout: 200 });
+  const open = Ariakit.useStoreState(store, 'open');
+
   return (
-    <Ariakit.HovercardProvider placement={placement} showTimeout={150} hideTimeout={200}>
+    <>
       <Ariakit.HovercardAnchor
+        store={store}
+        aria-label={label}
+        aria-expanded={open}
+        onClick={() => store.toggle()}
         render={
-          <Ariakit.HovercardDisclosure
-            render={
-              <button
-                type="button"
-                aria-label={label}
-                className={cn(
-                  'inline-flex shrink-0 cursor-help items-center justify-center rounded-full text-(--cui-color-text-muted) transition-colors hover:text-(--cui-color-text-default) focus-visible:outline-1 focus-visible:outline-offset-1 focus-visible:outline-(--cui-color-outline)',
-                  triggerClassName,
-                )}
-              />
-            }
+          <button
+            type="button"
+            className={cn(
+              'inline-flex shrink-0 cursor-help items-center justify-center rounded-full text-(--cui-color-text-muted) transition-colors hover:text-(--cui-color-text-default) focus-visible:outline-1 focus-visible:outline-offset-1 focus-visible:outline-(--cui-color-outline)',
+              triggerClassName,
+            )}
           />
         }
       >
         {trigger}
       </Ariakit.HovercardAnchor>
       <Ariakit.Hovercard
+        store={store}
         portal
         gutter={gutter}
         unmountOnHide
@@ -56,6 +60,6 @@ export function Hovercard({
         )}
         {children}
       </Ariakit.Hovercard>
-    </Ariakit.HovercardProvider>
+    </>
   );
 }

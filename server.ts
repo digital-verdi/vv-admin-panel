@@ -13,6 +13,21 @@ const SERVER_ENTRY = new URL('./dist/server/server.js', import.meta.url);
 const env = process.env;
 const BASE_PATH = (env.VITE_BASE_PATH || '').replace(/\/$/, '');
 
+// Fail fast on a missing/short SESSION_SECRET. Otherwise the session module throws
+// lazily on the first server-function call, which Bun then surfaces as a confusing
+// "Server function module export not resolved" error on every subsequent request.
+const MIN_SESSION_SECRET_LENGTH = 32;
+if (env.NODE_ENV !== 'development') {
+  const secret = env.SESSION_SECRET;
+  if (!secret || secret.length < MIN_SESSION_SECRET_LENGTH) {
+    console.error(
+      `[admin-panel] SESSION_SECRET must be set to at least ${MIN_SESSION_SECRET_LENGTH} characters ` +
+        `(got ${secret ? secret.length : 0}). Refusing to start.`,
+    );
+    process.exit(1);
+  }
+}
+
 const ONE_DAY = 86400;
 const rawMaxAge = Number(env.ADMIN_PANEL_STATIC_CACHE_MAX_AGE ?? env.STATIC_CACHE_MAX_AGE);
 const rawSMaxAge = Number(env.ADMIN_PANEL_STATIC_CACHE_S_MAX_AGE ?? env.STATIC_CACHE_S_MAX_AGE);

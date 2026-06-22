@@ -320,11 +320,16 @@ export const adminLogoutFn = createServerFn({ method: 'POST' }).handler(async ()
 });
 
 export const getCurrentUserFn = createServerFn({ method: 'GET' }).handler(async () => {
-  const session = await useAppSession();
-  return {
-    user: session.data.user ?? null,
-    isAuthenticated: !!session.data.token,
-  };
+  try {
+    const session = await useAppSession();
+    return {
+      user: session.data.user ?? null,
+      isAuthenticated: !!session.data.token,
+    };
+  } catch (error) {
+    console.error('[getCurrentUserFn] Failed to read session, treating as logged out:', error);
+    return { user: null, isAuthenticated: false };
+  }
 });
 
 /** Shared queryOptions so consumers deduplicate the OpenID availability check. */

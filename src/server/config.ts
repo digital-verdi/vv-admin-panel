@@ -31,6 +31,7 @@ const WRAPPER_TYPES = new Set([
 ]);
 
 const INDEXED_ARRAY_RE = /^(.+)\.(\d+)$/;
+const ARRAY_INDEX_KEY_RE = /^(0|[1-9]\d*)$/;
 
 function unwrapSchema(schema: t.ZodSchemaLike): t.ZodSchemaLike {
   const seen = new Set<t.ZodSchemaLike>();
@@ -598,6 +599,19 @@ export function parseIndexedArrayPath(
   return { arrayPath, index: Number(indexStr) };
 }
 
+export function toConfigArraySource(value: unknown): unknown[] | undefined {
+  if (Array.isArray(value)) return [...value];
+  if (!value || typeof value !== 'object') return undefined;
+  const arrayValue: unknown[] = [];
+  for (const [key, entryValue] of Object.entries(value as Record<string, t.ConfigValue>)) {
+    if (!ARRAY_INDEX_KEY_RE.test(key)) return undefined;
+    const index = Number(key);
+    if (!Number.isSafeInteger(index)) return undefined;
+    arrayValue[index] = entryValue;
+  }
+  return arrayValue;
+}
+
 /** Shared queryOptions for the schema tree used by command palette search. */
 export const configSchemaTreeOptions = queryOptions({
   queryKey: ['configSchemaTree'],
@@ -918,7 +932,7 @@ export function mergeIndexedArrayEntriesIntoBase(
       }
       current = (current as Record<string, unknown>)[seg];
     }
-    const arr = Array.isArray(current) ? [...current] : [];
+    const arr = toConfigArraySource(current) ?? [];
     for (const [idx, value] of updates) {
       arr[idx] = value;
     }

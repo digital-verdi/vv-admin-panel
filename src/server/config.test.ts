@@ -15,6 +15,7 @@ import {
   resolveSubSchema,
   validateFieldValue,
   parseIndexedArrayPath,
+  toConfigArraySource,
   normalizeAppServiceKeys,
   mergeIndexedArrayEntriesIntoBase,
 } from './config';
@@ -1050,6 +1051,21 @@ describe('parseIndexedArrayPath', () => {
   });
 });
 
+describe('toConfigArraySource', () => {
+  it('converts legacy numeric-key array objects to arrays', () => {
+    expect(
+      toConfigArraySource({
+        0: { name: 'first' },
+        2: { name: 'third' },
+      }),
+    ).toEqual([{ name: 'first' }, undefined, { name: 'third' }]);
+  });
+
+  it('rejects non-index object keys', () => {
+    expect(toConfigArraySource({ 0: 'zero', current: 'not-array' })).toBeUndefined();
+  });
+});
+
 describe('normalizeAppServiceKeys', () => {
   it('maps MCP AppService output to canonical mcpServers records', () => {
     const normalized = normalizeAppServiceKeys({
@@ -1117,6 +1133,37 @@ describe('mergeIndexedArrayEntriesIntoBase', () => {
       },
     ]);
     expect(mergedPaths.has('mcpServers.filesystem.args')).toBe(true);
+  });
+
+  it('preserves legacy numeric-key array objects while merging', () => {
+    const result = mergeIndexedArrayEntriesIntoBase(
+      [
+        {
+          fieldPath: 'endpoints.custom.1',
+          value: { name: 'edited', baseURL: 'https://edited.example.com' },
+        },
+      ],
+      {
+        endpoints: {
+          custom: {
+            0: { name: 'first', baseURL: 'https://first.example.com' },
+            1: { name: 'second', baseURL: 'https://second.example.com' },
+            2: { name: 'third', baseURL: 'https://third.example.com' },
+          },
+        },
+      },
+    );
+
+    expect(result).toEqual([
+      {
+        fieldPath: 'endpoints.custom',
+        value: [
+          { name: 'first', baseURL: 'https://first.example.com' },
+          { name: 'edited', baseURL: 'https://edited.example.com' },
+          { name: 'third', baseURL: 'https://third.example.com' },
+        ],
+      },
+    ]);
   });
 });
 

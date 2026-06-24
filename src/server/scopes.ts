@@ -21,7 +21,7 @@ import { BASE_CONFIG_PRINCIPAL_ID } from './constants';
 import { requireAnyCapability } from './capabilities';
 import { safeFieldPath } from './utils/validation';
 import { apiFetch } from './utils/api';
-import { normalizeAppServiceKeys, parseIndexedArrayPath } from './config';
+import { normalizeAppServiceKeys, parseIndexedArrayPath, toConfigArraySource } from './config';
 
 // ── Dot-path helpers ─────────────────────────────────────────────────
 
@@ -45,7 +45,7 @@ async function getScopeOverrides(
   if (response.status === 404) return {};
   if (!response.ok) throw new Error(`Failed to fetch config: ${response.status}`);
   const { config } = (await response.json()) as AdminConfigResponse;
-  return (config.overrides ?? {}) as Record<string, unknown>;
+  return normalizeAppServiceKeys((config.overrides ?? {}) as Record<string, t.ConfigValue>);
 }
 
 async function getBaseConfig(): Promise<Record<string, unknown>> {
@@ -88,10 +88,12 @@ async function mergeIndexedArrayEntriesForScope(
     const pending = restIndex === undefined ? undefined : rest[restIndex]?.value;
     const scopeValue = deepGet(scopeOverrides, arrayPath);
     const baseValue = deepGet(baseConfig, arrayPath);
-    let source = baseValue;
-    if (Array.isArray(scopeValue)) source = scopeValue;
-    if (Array.isArray(pending)) source = pending;
-    const arr = Array.isArray(source) ? [...source] : [];
+    let source = toConfigArraySource(baseValue);
+    const scopeSource = toConfigArraySource(scopeValue);
+    const pendingSource = toConfigArraySource(pending);
+    if (scopeSource) source = scopeSource;
+    if (pendingSource) source = pendingSource;
+    const arr = source ?? [];
     for (const [idx, value] of updates) {
       arr[idx] = value;
     }

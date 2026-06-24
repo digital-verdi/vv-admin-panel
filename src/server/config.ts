@@ -30,6 +30,8 @@ const WRAPPER_TYPES = new Set([
   'ZodPipeline',
 ]);
 
+const INDEXED_ARRAY_RE = /^(.+)\.(\d+)$/;
+
 function unwrapSchema(schema: t.ZodSchemaLike): t.ZodSchemaLike {
   const seen = new Set<t.ZodSchemaLike>();
   let current = schema;
@@ -583,6 +585,19 @@ export function validateFieldValue(
   return { success: true };
 }
 
+export function parseIndexedArrayPath(
+  fieldPath: string,
+): { arrayPath: string; index: number } | null {
+  const match = INDEXED_ARRAY_RE.exec(fieldPath);
+  if (!match) return null;
+  const [, arrayPath, indexStr] = match;
+  const schema = resolveSubSchema(configSchema as t.ZodSchemaLike, arrayPath.split('.'));
+  if (!schema) return null;
+  const unwrapped = unwrapSchema(schema);
+  if (unwrapped?._def?.typeName !== 'ZodArray') return null;
+  return { arrayPath, index: Number(indexStr) };
+}
+
 /** Shared queryOptions for the schema tree used by command palette search. */
 export const configSchemaTreeOptions = queryOptions({
   queryKey: ['configSchemaTree'],
@@ -871,8 +886,6 @@ export const baseConfigOptions = queryOptions({
   staleTime: 30_000,
 });
 
-const INDEXED_ARRAY_RE = /^(.+)\.(\d+)$/;
-
 async function mergeIndexedArrayEntries(
   entries: Array<{ fieldPath: string; value: unknown }>,
   mergedPaths?: Set<string>,
@@ -881,11 +894,11 @@ async function mergeIndexedArrayEntries(
   const rest: Array<{ fieldPath: string; value: unknown }> = [];
 
   for (const entry of entries) {
-    const match = INDEXED_ARRAY_RE.exec(entry.fieldPath);
-    if (match) {
-      const [, arrayPath, indexStr] = match;
+    const parsed = parseIndexedArrayPath(entry.fieldPath);
+    if (parsed) {
+      const { arrayPath, index } = parsed;
       if (!indexed.has(arrayPath)) indexed.set(arrayPath, new Map());
-      indexed.get(arrayPath)!.set(Number(indexStr), entry.value);
+      indexed.get(arrayPath)!.set(index, entry.value);
     } else {
       rest.push(entry);
     }

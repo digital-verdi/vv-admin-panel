@@ -21,8 +21,7 @@ import { BASE_CONFIG_PRINCIPAL_ID } from './constants';
 import { requireAnyCapability } from './capabilities';
 import { safeFieldPath } from './utils/validation';
 import { apiFetch } from './utils/api';
-
-const INDEXED_ARRAY_RE = /^(.+)\.(\d+)$/;
+import { parseIndexedArrayPath } from './config';
 
 // ── Dot-path helpers ─────────────────────────────────────────────────
 
@@ -66,15 +65,15 @@ async function mergeIndexedArrayEntriesForScope(
   const restByPath = new Map<string, number>();
 
   for (const entry of entries) {
-    const match = INDEXED_ARRAY_RE.exec(entry.fieldPath);
-    if (!match) {
+    const parsed = parseIndexedArrayPath(entry.fieldPath);
+    if (!parsed) {
       restByPath.set(entry.fieldPath, rest.length);
       rest.push(entry);
       continue;
     }
-    const [, arrayPath, indexStr] = match;
+    const { arrayPath, index } = parsed;
     if (!indexed.has(arrayPath)) indexed.set(arrayPath, new Map());
-    indexed.get(arrayPath)!.set(Number(indexStr), entry.value);
+    indexed.get(arrayPath)!.set(index, entry.value);
   }
 
   if (indexed.size === 0) return entries;

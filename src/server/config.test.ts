@@ -14,6 +14,7 @@ import {
   flattenTree,
   resolveSubSchema,
   validateFieldValue,
+  parseIndexedArrayPath,
 } from './config';
 
 interface ZodV3Schema extends t.ZodSchemaLike {
@@ -677,9 +678,9 @@ describe('validateFieldValue', () => {
   });
 
   it('validates a nested field reached through a union (header value must be string)', () => {
-    expect(
-      validateFieldValue('mcpServers.foo.headers.Authorization', 'Bearer xyz'),
-    ).toEqual({ success: true });
+    expect(validateFieldValue('mcpServers.foo.headers.Authorization', 'Bearer xyz')).toEqual({
+      success: true,
+    });
     const bad = validateFieldValue('mcpServers.foo.headers.Authorization', 42);
     expect(bad.success).toBe(false);
   });
@@ -1031,6 +1032,19 @@ describe('resolveSubSchema for endpoints', () => {
       const sub = resolveSubSchema(realConfigSchema, ['endpoints', provider]);
       expect(sub).not.toBeNull();
     }
+  });
+});
+
+describe('parseIndexedArrayPath', () => {
+  it('accepts numeric suffixes when the parent path is an array', () => {
+    expect(parseIndexedArrayPath('endpoints.custom.0')).toEqual({
+      arrayPath: 'endpoints.custom',
+      index: 0,
+    });
+  });
+
+  it('rejects numeric suffixes when the parent path is a record', () => {
+    expect(parseIndexedArrayPath('mcpServers.foo.headers.2024')).toBeNull();
   });
 });
 

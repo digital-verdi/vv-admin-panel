@@ -15,6 +15,7 @@ import {
   resolveSubSchema,
   validateFieldValue,
   parseIndexedArrayPath,
+  normalizeAppServiceKeys,
 } from './config';
 
 interface ZodV3Schema extends t.ZodSchemaLike {
@@ -1045,6 +1046,32 @@ describe('parseIndexedArrayPath', () => {
 
   it('rejects numeric suffixes when the parent path is a record', () => {
     expect(parseIndexedArrayPath('mcpServers.foo.headers.2024')).toBeNull();
+  });
+});
+
+describe('normalizeAppServiceKeys', () => {
+  it('maps Azure groupMap output to canonical groups arrays', () => {
+    const normalized = normalizeAppServiceKeys({
+      endpoints: {
+        azureOpenAI: {
+          isValid: true,
+          groupMap: {
+            default: { apiKey: 'key-a', instanceName: 'instance-a' },
+            fallback: { apiKey: 'key-b', instanceName: 'instance-b' },
+          },
+          errors: ['ignored'],
+          modelNames: ['ignored'],
+        },
+      },
+    });
+    expect(normalized.endpoints).toEqual({
+      azureOpenAI: {
+        groups: [
+          { group: 'default', apiKey: 'key-a', instanceName: 'instance-a' },
+          { group: 'fallback', apiKey: 'key-b', instanceName: 'instance-b' },
+        ],
+      },
+    });
   });
 });
 

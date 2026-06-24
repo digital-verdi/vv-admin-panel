@@ -21,7 +21,7 @@ import { BASE_CONFIG_PRINCIPAL_ID } from './constants';
 import { requireAnyCapability } from './capabilities';
 import { safeFieldPath } from './utils/validation';
 import { apiFetch } from './utils/api';
-import { parseIndexedArrayPath } from './config';
+import { normalizeAppServiceKeys, parseIndexedArrayPath } from './config';
 
 // ── Dot-path helpers ─────────────────────────────────────────────────
 
@@ -51,8 +51,8 @@ async function getScopeOverrides(
 async function getBaseConfig(): Promise<Record<string, unknown>> {
   const response = await apiFetch('/api/admin/config/base');
   if (!response.ok) throw new Error(`Failed to fetch base config: ${response.status}`);
-  const { config } = (await response.json()) as { config: Record<string, unknown> };
-  return config;
+  const { config } = (await response.json()) as { config: Record<string, t.ConfigValue> };
+  return normalizeAppServiceKeys(config);
 }
 
 async function mergeIndexedArrayEntriesForScope(

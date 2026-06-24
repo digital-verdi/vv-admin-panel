@@ -792,7 +792,7 @@ function normalizeEndpointValue(value: t.ConfigValue): t.ConfigValue {
   return value;
 }
 
-function normalizeAppServiceKeys(
+export function normalizeAppServiceKeys(
   raw: Record<string, t.ConfigValue>,
 ): Record<string, t.ConfigValue> {
   const result: Record<string, t.ConfigValue> = {};

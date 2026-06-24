@@ -21,7 +21,6 @@ import {
 import {
   flattenObject,
   unflattenObject,
-  serializeKVPairs,
   deepSerializeKVPairs,
   normalizeImportConfig,
   hasConfigCapability,
@@ -537,9 +536,7 @@ export function ConfigPage({ initialTab, highlightField, initialScope }: t.Confi
       .filter((p) => editedValues[p] !== undefined)
       .map((p) => ({
         fieldPath: p,
-        value: /\.\d+$/.test(p)
-          ? deepSerializeKVPairs(editedValues[p])
-          : serializeKVPairs(editedValues[p]),
+        value: deepSerializeKVPairs(editedValues[p]),
       }));
     const resets = touched.filter((p) => editedValues[p] === undefined);
     const inheritedMcpKeys = (() => {
@@ -631,7 +628,7 @@ export function ConfigPage({ initialTab, highlightField, initialScope }: t.Confi
   const serializedEditedValues = useMemo(() => {
     const result: t.FlatConfigMap = {};
     for (const [k, v] of Object.entries(editedValues)) {
-      result[k] = /\.\d+$/.test(k) ? deepSerializeKVPairs(v) : serializeKVPairs(v);
+      result[k] = deepSerializeKVPairs(v);
     }
     return result;
   }, [editedValues]);

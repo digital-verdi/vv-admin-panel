@@ -30,6 +30,12 @@ const navItems: t.NavItem[] = [
     icon: 'user',
     capability: [SystemCapabilities.READ_ROLES, SystemCapabilities.READ_GROUPS],
   },
+  {
+    labelKey: 'com_nav_invites',
+    path: '/invites',
+    icon: 'mail',
+    capability: SystemCapabilities.MANAGE_USERS,
+  },
   { labelKey: 'com_nav_grants', path: '/grants', icon: 'lock' },
   { labelKey: 'com_nav_help', path: '/help', icon: 'question' },
 ];

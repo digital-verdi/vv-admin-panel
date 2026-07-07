@@ -5,6 +5,7 @@ export type * from './config-ui';
 export type * from './fields';
 export type * from './grant';
 export type * from './hooks';
+export type * from './invite';
 export type * from './layout';
 export type * from './role';
 export type * from './scope';

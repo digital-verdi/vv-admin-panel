@@ -13,6 +13,7 @@ import { EmptyState, LoadingState } from '@/components/shared';
 import { notifySuccess, notifyError } from '@/utils';
 import { useCapabilities } from '@/hooks';
 import { SystemCapabilities } from '@/constants';
+import { ModelTierField } from './ModelTierField';
 
 const FAIL_MODE_OPTIONS: t.SelectOption[] = [
   { label: 'Closed — block on PII-engine failure', value: 'closed' },
@@ -99,9 +100,12 @@ export function LlmRouterPage() {
 
   const update = (patch: Partial<t.LlmProxyConfigInput>) => setForm((prev) => (prev ? { ...prev, ...patch } : prev));
 
-  const modelOptions: t.SelectOption[] | undefined = catalog.length
-    ? catalog.map((m) => ({ label: m.name, value: m.id }))
-    : undefined;
+  // Catalog options for the searchable model pickers, de-duplicated by id (the OpenRouter catalog can
+  // surface the same id twice). May be empty in local/mock mode — the combobox still lets an admin type
+  // a custom model id via allowCreateOption.
+  const catalogOptions: t.SelectOption[] = Array.from(
+    new Map(catalog.map((m) => [m.id, { label: m.name, value: m.id }])).values(),
+  );
 
   const piiLocked = !config.piiSecretsPresent;
   const busy = saveMutation.isPending;
@@ -121,13 +125,11 @@ export function LlmRouterPage() {
       description="1 primary model + up to 2 fallbacks, in priority order."
       htmlFor={`llm-${key}`}
     >
-      <ListField
+      <ModelTierField
         id={`llm-${key}`}
         values={form[key]}
         onChange={(v) => update({ [key]: v } as Partial<t.LlmProxyConfigInput>)}
-        options={modelOptions}
-        placeholder="e.g. openai/gpt-4.1"
-        itemLabel="model"
+        options={catalogOptions}
         disabled={!canManage}
         aria-label={label}
       />
@@ -293,7 +295,17 @@ export function LlmRouterPage() {
         </p>
         <button
           type="button"
-          onClick={() => saveMutation.mutate({ ...form, isActive: true })}
+          onClick={() =>
+            saveMutation.mutate({
+              ...form,
+              isActive: true,
+              // Drop any empty tier row (a seeded row the admin left unfilled) so the PUT can't fail the
+              // proxy's `min(1)` element check and silently lose the whole save.
+              chatModelsPremium: form.chatModelsPremium.filter(Boolean),
+              chatModelsStandard: form.chatModelsStandard.filter(Boolean),
+              chatModelsBasic: form.chatModelsBasic.filter(Boolean),
+            })
+          }
           disabled={!canManage || busy}
           aria-disabled={!canManage || busy || undefined}
           className="flex shrink-0 items-center gap-1.5 rounded-lg border border-(--cui-color-stroke-default) bg-(--cui-color-background-accent-default) px-4 py-2 text-sm font-medium text-(--cui-color-text-on-primary) transition-colors hover:bg-(--cui-color-background-accent-hover) disabled:cursor-not-allowed disabled:opacity-50"

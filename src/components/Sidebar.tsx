@@ -36,6 +36,12 @@ const navItems: t.NavItem[] = [
     icon: 'mail',
     capability: SystemCapabilities.MANAGE_USERS,
   },
+  {
+    labelKey: 'com_nav_llm_router',
+    path: '/llm-router',
+    icon: 'git-merge',
+    capability: SystemCapabilities.READ_CONFIGS,
+  },
   { labelKey: 'com_nav_grants', path: '/grants', icon: 'lock' },
   { labelKey: 'com_nav_help', path: '/help', icon: 'question' },
 ];

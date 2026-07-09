@@ -7,6 +7,7 @@ export type * from './grant';
 export type * from './hooks';
 export type * from './invite';
 export type * from './layout';
+export type * from './llmProxy';
 export type * from './role';
 export type * from './scope';
 export type * from './server';

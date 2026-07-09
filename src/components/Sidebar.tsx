@@ -33,7 +33,7 @@ const navItems: t.NavItem[] = [
   {
     labelKey: 'com_nav_invites',
     path: '/invites',
-    icon: 'mail',
+    icon: 'email',
     capability: SystemCapabilities.MANAGE_USERS,
   },
   {

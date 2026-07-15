@@ -1,4 +1,5 @@
 import yaml from 'js-yaml';
+import { Constants } from 'librechat-data-provider';
 import type * as t from '@/types';
 import { deepSerializeKVPairs, normalizeImportConfig } from '@/utils';
 import { getScopeTypeConfig } from '@/constants';
@@ -6,22 +7,35 @@ import { getScopeTypeConfig } from '@/constants';
 const MAX_FILENAME_BASE = 120;
 const INVALID_FILENAME_CHARS = /[/\\:*?"<>|]/g;
 
+function isPlainObject(value: t.ConfigValue): value is Record<string, t.ConfigValue> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
 /**
- * Recursively drops object properties whose value is `undefined` while keeping
- * `null`, `false`, `0` and empty strings. Array order is preserved and the input
- * is never mutated.
+ * Recursively removes `null`/`undefined` values and the empty objects that result
+ * (`false`, `0`, empty strings and arrays are kept; input is never mutated).
+ *
+ * The admin panel's active config is LibreChat's AppService runtime representation:
+ * unset optionals come through as `null` (e.g. `mcpServers`, `mcpSettings`) or empty
+ * stub objects (e.g. `turnstile: {}`), which the strict input `configSchema` rejects
+ * (`Expected object, received null`, `turnstile.siteKey: Required`). Dropping them
+ * makes the exported config a valid, importable `librechat.yaml`.
  */
-export function removeUndefinedDeep(value: t.ConfigValue): t.ConfigValue {
+export function sanitizeForImport(value: t.ConfigValue): t.ConfigValue {
   if (Array.isArray(value)) {
-    return value.map((item) => removeUndefinedDeep(item));
+    return value.filter((item) => item !== null && item !== undefined).map(sanitizeForImport);
   }
-  if (value !== null && typeof value === 'object') {
+  if (isPlainObject(value)) {
     const result: Record<string, t.ConfigValue> = {};
     for (const [key, val] of Object.entries(value)) {
-      if (val === undefined) {
+      if (val === undefined || val === null) {
         continue;
       }
-      result[key] = removeUndefinedDeep(val as t.ConfigValue);
+      const cleaned = sanitizeForImport(val);
+      if (isPlainObject(cleaned) && Object.keys(cleaned).length === 0) {
+        continue;
+      }
+      result[key] = cleaned;
     }
     return result;
   }
@@ -29,16 +43,22 @@ export function removeUndefinedDeep(value: t.ConfigValue): t.ConfigValue {
 }
 
 /**
- * Canonicalizes an editor config object for export: converts UI key/value-pair
- * arrays back to records, maps legacy keys + strips interface permission fields
- * (matching the import/save round-trip), and removes `undefined` holes.
+ * Canonicalizes an editor config object into a valid, importable `librechat.yaml`:
+ * converts UI key/value-pair arrays back to records, maps legacy keys + strips
+ * interface permission fields (matching the import/save round-trip), removes the
+ * AppService `null`/empty stubs, and backfills the required `version` (which the
+ * AppService runtime config omits) from the schema's canonical `CONFIG_VERSION`.
  */
 export function prepareConfigForExport(
   config: Record<string, t.ConfigValue>,
 ): Record<string, t.ConfigValue> {
   const canonical = deepSerializeKVPairs(config) as Record<string, t.ConfigValue>;
   const normalized = normalizeImportConfig(canonical);
-  return removeUndefinedDeep(normalized) as Record<string, t.ConfigValue>;
+  const sanitized = sanitizeForImport(normalized) as Record<string, t.ConfigValue>;
+  if (typeof sanitized.version !== 'string' || sanitized.version.length === 0) {
+    sanitized.version = Constants.CONFIG_VERSION;
+  }
+  return sanitized;
 }
 
 /**

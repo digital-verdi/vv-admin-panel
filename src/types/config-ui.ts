@@ -250,6 +250,18 @@ export interface ImportValidationError {
   message: string;
 }
 
+export interface ExportYamlSnapshot {
+  config: Record<string, ConfigValue>;
+  scopeSelection: ScopeSelection;
+  suggestedFilename: string;
+}
+
+export interface ExportYamlDialogProps {
+  open: boolean;
+  snapshot: ExportYamlSnapshot | null;
+  onClose: () => void;
+}
+
 export interface InfoBannerProps {
   text: string;
   dismissible?: boolean;

@@ -1,33 +1,40 @@
 import yaml from 'js-yaml';
 import { describe, it, expect } from 'vitest';
-import { PrincipalType } from 'librechat-data-provider';
+import { PrincipalType, configSchema, Constants } from 'librechat-data-provider';
 import type * as t from '@/types';
 import {
-  removeUndefinedDeep,
+  sanitizeForImport,
   prepareConfigForExport,
   serializeConfigToYaml,
   buildSuggestedFilename,
   normalizeYamlFilename,
 } from './export';
 
-describe('removeUndefinedDeep', () => {
-  it('drops undefined but keeps null, false, 0 and empty string', () => {
+describe('sanitizeForImport', () => {
+  it('drops null and undefined but keeps false, 0 and empty string', () => {
     const input: t.ConfigValue = { a: undefined, b: null, c: false, d: 0, e: '', f: 'x' };
-    expect(removeUndefinedDeep(input)).toEqual({ b: null, c: false, d: 0, e: '', f: 'x' });
+    expect(sanitizeForImport(input)).toEqual({ c: false, d: 0, e: '', f: 'x' });
   });
 
-  it('recurses into nested objects and arrays while preserving order', () => {
+  it('drops null-valued object fields and empty-object stubs (AppService artifacts)', () => {
     const input: t.ConfigValue = {
-      nested: { keep: 1, drop: undefined },
-      list: [{ k: 1, d: undefined }, 2, 3],
+      mcpServers: null,
+      mcpSettings: null,
+      turnstile: { siteKey: undefined, options: {} },
+      interface: { customWelcome: 'Hei' },
     };
-    expect(removeUndefinedDeep(input)).toEqual({ nested: { keep: 1 }, list: [{ k: 1 }, 2, 3] });
+    expect(sanitizeForImport(input)).toEqual({ interface: { customWelcome: 'Hei' } });
+  });
+
+  it('keeps empty arrays and filters null/undefined array elements', () => {
+    const input: t.ConfigValue = { list: [{ k: 1, d: undefined }, null, 2, 3], empty: [] };
+    expect(sanitizeForImport(input)).toEqual({ list: [{ k: 1 }, 2, 3], empty: [] });
   });
 
   it('does not mutate the input', () => {
-    const input: t.ConfigValue = { a: undefined, b: { c: undefined, d: 1 } };
-    removeUndefinedDeep(input);
-    expect(input).toEqual({ a: undefined, b: { c: undefined, d: 1 } });
+    const input: t.ConfigValue = { a: null, b: { c: undefined, d: 1 } };
+    sanitizeForImport(input);
+    expect(input).toEqual({ a: null, b: { c: undefined, d: 1 } });
   });
 });
 
@@ -68,9 +75,23 @@ describe('serializeConfigToYaml', () => {
 });
 
 describe('prepareConfigForExport', () => {
-  it('removes undefined holes and returns a plain config object', () => {
-    const result = prepareConfigForExport({ a: 1, b: undefined, c: { d: undefined, e: 2 } });
-    expect(result).toEqual({ a: 1, c: { e: 2 } });
+  it('drops null/undefined/empty holes and backfills version', () => {
+    const result = prepareConfigForExport({ a: 1, b: undefined, c: { d: null, e: 2 } });
+    expect(result).toEqual({ a: 1, c: { e: 2 }, version: Constants.CONFIG_VERSION });
+  });
+
+  it('keeps an existing version instead of overwriting it', () => {
+    const result = prepareConfigForExport({
+      version: '9.9.9',
+      interface: { customWelcome: 'Hei' },
+    });
+    expect(result.version).toBe('9.9.9');
+  });
+
+  it('backfills version from the canonical CONFIG_VERSION when absent', () => {
+    const result = prepareConfigForExport({ interface: { customWelcome: 'Hei' } });
+    expect(result.version).toBe(Constants.CONFIG_VERSION);
+    expect(Constants.CONFIG_VERSION).toBe('1.3.13');
   });
 
   it('round-trips through the YAML serializer without loss', () => {
@@ -80,6 +101,54 @@ describe('prepareConfigForExport', () => {
     });
     const loaded = yaml.load(serializeConfigToYaml(prepared), { schema: yaml.JSON_SCHEMA });
     expect(loaded).toEqual(prepared);
+  });
+
+  // Regression for the reported bug: the AppService runtime shape the admin panel actually
+  // exports (null mcp*, empty turnstile stub, missing version) must pass the REAL strict
+  // input configSchema after prepare + serialize + reload — i.e. it becomes importable.
+  it('makes the real AppService base shape pass the strict configSchema', () => {
+    const appServiceActiveConfig: Record<string, t.ConfigValue> = {
+      interface: { customWelcome: 'Velkommen til Varde Venn', modelSelect: false },
+      mcpServers: null,
+      mcpSettings: null,
+      turnstile: { siteKey: undefined, options: undefined },
+      registration: { socialLogins: ['google'] },
+      balance: { enabled: true, startBalance: 20000 },
+      fileStrategy: 's3',
+      endpoints: {
+        custom: [
+          {
+            name: 'Varde',
+            apiKey: '${OPENROUTER_KEY}',
+            baseURL: 'https://proxy/v1',
+            headers: { 'x-vv-user-id': '{{LIBRECHAT_USER_ID}}' },
+          },
+        ],
+      },
+    };
+
+    // Before the fix (raw serialize) the strict schema rejects it.
+    const rawFails = configSchema.safeParse(
+      yaml.load(serializeConfigToYaml(appServiceActiveConfig), { schema: yaml.JSON_SCHEMA }),
+    );
+    expect(rawFails.success).toBe(false);
+
+    // After the fix it validates.
+    const prepared = prepareConfigForExport(appServiceActiveConfig);
+    const reloaded = yaml.load(serializeConfigToYaml(prepared), { schema: yaml.JSON_SCHEMA });
+    const result = configSchema.safeParse(reloaded);
+    expect(result.success).toBe(true);
+    // the exact prod errors are gone
+    expect(prepared.version).toBe(Constants.CONFIG_VERSION);
+    expect('mcpServers' in prepared).toBe(false);
+    expect('mcpSettings' in prepared).toBe(false);
+    expect('turnstile' in prepared).toBe(false);
+    // real user config survives
+    expect(prepared.interface).toEqual({
+      customWelcome: 'Velkommen til Varde Venn',
+      modelSelect: false,
+    });
+    expect(prepared.endpoints).toEqual(appServiceActiveConfig.endpoints);
   });
 });
 

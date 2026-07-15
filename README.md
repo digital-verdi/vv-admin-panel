@@ -22,6 +22,10 @@ configuration currently shown for the selected scope:
   for a **role/group**, it is that scope's own overrides (a delta), matching import-as-profile.
 - **File** — a plain `librechat.yaml`-shaped object at the root (no Varde-specific wrapper). You choose the
   `.yaml`/`.yml` filename; it is sanitized before download.
+- **Normalized** — LibreChat's AppService runtime config represents unset optionals as `null` / empty-object
+  stubs (e.g. `mcpServers`, `turnstile: {}`) and omits `version`, none of which the strict import schema
+  accepts. The export drops those stubs and backfills the canonical `version`, so the file is a valid
+  `librechat.yaml`.
 - **Validated** — the generated YAML is run through the same parser as Import YAML before the download starts,
   so an exported file is always re-importable.
 - **Requires** `MANAGE_CONFIGS`, and is **disabled while there are unsaved changes** (save or discard first) so

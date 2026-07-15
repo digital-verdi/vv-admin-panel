@@ -39,6 +39,8 @@ import { ResetBaseConfigDialog } from './ResetBaseConfigDialog';
 import { ConfirmSaveDialog } from './ConfirmSaveDialog';
 import { ConfigTabContent } from './ConfigTabContent';
 import { ImportYamlDialog } from './ImportYamlDialog';
+import { ExportYamlDialog } from './ExportYamlDialog';
+import { prepareConfigForExport, buildSuggestedFilename } from './export';
 import { ContentToolbar } from './ContentToolbar';
 import { SystemCapabilities } from '@/constants';
 import { ConfigTabBar } from './ConfigTabBar';
@@ -191,6 +193,8 @@ export function ConfigPage({ initialTab, highlightField, initialScope }: t.Confi
   );
 
   const [importOpen, setImportOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportSnapshot, setExportSnapshot] = useState<t.ExportYamlSnapshot | null>(null);
   const [importSuccess, setImportSuccess] = useState(false);
   const dismissTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => clearTimeout(dismissTimer.current), []);
@@ -868,6 +872,26 @@ export function ConfigPage({ initialTab, highlightField, initialScope }: t.Confi
 
   const banner = renderBanner();
 
+  const handleOpenExport = useCallback(() => {
+    if (!activeConfigValues || isDirty || !canManageConfig) {
+      return;
+    }
+    setExportSnapshot({
+      config: prepareConfigForExport(activeConfigValues),
+      scopeSelection: selectedScope,
+      suggestedFilename: buildSuggestedFilename(selectedScope, new Date()),
+    });
+    setExportOpen(true);
+  }, [activeConfigValues, isDirty, canManageConfig, selectedScope]);
+
+  const exportTitle = (() => {
+    if (!canManageConfig) {
+      return localize('com_cap_no_permission', { cap: SystemCapabilities.MANAGE_CONFIGS });
+    }
+    if (isDirty) return localize('com_config_export_yaml_dirty');
+    return undefined;
+  })();
+
   const resetBaseTitle = (() => {
     if (!canManageConfig) {
       return localize('com_cap_no_permission', { cap: SystemCapabilities.MANAGE_CONFIGS });
@@ -889,6 +913,10 @@ export function ConfigPage({ initialTab, highlightField, initialScope }: t.Confi
               : undefined
           }
           onImportClick={() => setImportOpen(true)}
+          showExport
+          exportDisabled={isDirty || !canManageConfig || !activeConfigValues}
+          exportTitle={exportTitle}
+          onExportClick={handleOpenExport}
           showReset={!isEditingScope && dbOverridePaths.size > 0}
           resetDisabled={isDirty || !canManageConfig}
           resetTitle={resetBaseTitle}
@@ -998,6 +1026,15 @@ export function ConfigPage({ initialTab, highlightField, initialScope }: t.Confi
         onImportAsProfile={handleImportAsProfile}
       />
 
+      <ExportYamlDialog
+        open={exportOpen}
+        snapshot={exportSnapshot}
+        onClose={() => {
+          setExportOpen(false);
+          setExportSnapshot(null);
+        }}
+      />
+
       <ResetBaseConfigDialog
         open={resetBaseOpen}
         resetting={resettingBase}
@@ -1018,6 +1055,10 @@ function HeaderActions({
   importDisabled,
   importTitle,
   onImportClick,
+  showExport,
+  exportDisabled,
+  exportTitle,
+  onExportClick,
   showReset,
   resetDisabled,
   resetTitle,
@@ -1030,6 +1071,10 @@ function HeaderActions({
   importDisabled: boolean;
   importTitle?: string;
   onImportClick: () => void;
+  showExport: boolean;
+  exportDisabled: boolean;
+  exportTitle?: string;
+  onExportClick: () => void;
   showReset: boolean;
   resetDisabled: boolean;
   resetTitle?: string;
@@ -1060,6 +1105,21 @@ function HeaderActions({
             <Icon name="upload" size="xs" />
           </span>
           {localize('com_config_import_yaml')}
+        </button>
+      )}
+      {showExport && (
+        <button
+          type="button"
+          onClick={onExportClick}
+          disabled={exportDisabled}
+          aria-disabled={exportDisabled || undefined}
+          title={exportTitle}
+          className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-(--cui-color-stroke-default) bg-transparent px-3 py-1.5 text-sm text-(--cui-color-text-default) transition-colors hover:bg-(--cui-color-background-hover) disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <span aria-hidden="true">
+            <Icon name="download" size="xs" />
+          </span>
+          {localize('com_config_export_yaml')}
         </button>
       )}
       {showReset && (

@@ -6,10 +6,29 @@ A browser-based management interface for [LibreChat](https://github.com/danny-av
 
 - **Configuration management** — View and edit all LibreChat settings through a dynamic, schema-driven form. New fields added to the schema appear automatically.
 - **Role and group overrides** — Apply configuration overrides scoped to specific roles or groups, with a priority-based cascade that determines the final resolved value for each user.
+- **Configuration YAML export/import** — Download the saved active configuration for the selected scope as a `librechat.yaml`-shaped file, or upload/paste one back in via Import YAML.
 - **User and group administration** — Create and manage groups, assign roles, and control access.
 - **Authentication** — Supports username/password login and OpenID SSO when enabled on the LibreChat instance.
 - **Localization** — Full multi-language support for all UI strings.
 - **Accessibility** — Keyboard navigable with ARIA regions, focus management, and screen reader support.
+
+### Configuration YAML export
+
+The **Export YAML** action (next to Import YAML on the configuration page) downloads the saved active
+configuration currently shown for the selected scope:
+
+- **Source** — the exact object the editor renders (`activeConfigValues`), across **all** tabs, not just the
+  active one. For **Base**, this is the full effective config (`librechat.yaml` merged with base DB overrides);
+  for a **role/group**, it is that scope's own overrides (a delta), matching import-as-profile.
+- **File** — a plain `librechat.yaml`-shaped object at the root (no Varde-specific wrapper). You choose the
+  `.yaml`/`.yml` filename; it is sanitized before download.
+- **Validated** — the generated YAML is run through the same parser as Import YAML before the download starts,
+  so an exported file is always re-importable.
+- **Requires** `MANAGE_CONFIGS`, and is **disabled while there are unsaved changes** (save or discard first) so
+  the file is always one consistent, saved configuration.
+- **Sensitive** — the file may contain API keys, credentials or internal URLs (values are never masked or
+  logged). Store it securely and do not commit it. Re-importing a full Base config materializes values
+  previously inherited from `librechat.yaml` as DB overrides.
 
 ## Getting started
 

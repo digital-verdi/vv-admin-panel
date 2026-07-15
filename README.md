@@ -7,6 +7,7 @@ A browser-based management interface for [LibreChat](https://github.com/danny-av
 - **Configuration management** — View and edit all LibreChat settings through a dynamic, schema-driven form. New fields added to the schema appear automatically.
 - **Role and group overrides** — Apply configuration overrides scoped to specific roles or groups, with a priority-based cascade that determines the final resolved value for each user.
 - **Configuration YAML export/import** — Download the saved active configuration for the selected scope as a `librechat.yaml`-shaped file, or upload/paste one back in via Import YAML.
+- **LLM Router (Varde)** — Manage the `vv-llm-proxy`: dynamic chat-model groups (OpenRouter egress), embeddings, PII pseudonymization — applied live, and kept in sync with the LibreChat config.
 - **User and group administration** — Create and manage groups, assign roles, and control access.
 - **Authentication** — Supports username/password login and OpenID SSO when enabled on the LibreChat instance.
 - **Localization** — Full multi-language support for all UI strings.
@@ -33,6 +34,26 @@ configuration currently shown for the selected scope:
 - **Sensitive** — the file may contain API keys, credentials or internal URLs (values are never masked or
   logged). Store it securely and do not commit it. Re-importing a full Base config materializes values
   previously inherited from `librechat.yaml` as DB overrides.
+
+### LLM Router (Varde)
+
+The **LLM Router** page manages the Varde `vv-llm-proxy` via its admin API (`/admin/config`,
+`/admin/models`), server-to-server with a separate admin Bearer (`VV_LLM_PROXY_ADMIN_KEY` →
+`VV_LLM_PROXY_BASE_URL`, never exposed to the browser). Requires `MANAGE_CONFIGS`.
+
+- **Dynamic chat-model groups** — Add / rename / reorder / delete groups. Each group has an editable
+  **name** (sent verbatim to the model as the selected `model`), a **stable id** (survives renames), **1
+  primary + up to 2 fallbacks**, and **legacy names** kept routable after a rename so nothing breaks.
+  Exactly one **default group** drives LibreChat's title generation + default model spec.
+- **Safe rename/delete** — Renaming keeps the old name routable via legacy names; deleting a group requires
+  choosing a replacement default (when it was the default) and offers to fold its names into another group.
+- **LibreChat sync** — On save, the `Varde` endpoint's `models.default` + `titleModel` and the Varde model
+  specs' `preset.model` are updated to match the groups. An **impact preview** shows the before→after before
+  you save. The proxy is saved **first** (it accepts both current + legacy names), so a failed LibreChat
+  sync never breaks routing; a **Retry LibreChat sync** action re-runs just the sync.
+- **Optimistic concurrency** — The proxy config carries a revision token; a concurrent edit yields a clear
+  "config changed elsewhere" prompt (409) instead of silently overwriting. If the proxy still runs the
+  legacy tier API, the page shows the current routing **read-only** until the proxy is upgraded.
 
 ## Getting started
 

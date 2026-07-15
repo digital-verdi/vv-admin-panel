@@ -1,0 +1,56 @@
+import type * as t from '@/types';
+
+/** Append a new empty group, seeded with the first catalog model not already used by another group. */
+export function addGroup(
+  config: t.ChatRoutingConfig,
+  catalog: t.SelectOption[],
+  newId: () => string,
+): t.ChatRoutingConfig {
+  const used = new Set(config.groups.flatMap((group) => group.models));
+  const seed = catalog.find((option) => !used.has(option.value))?.value ?? '';
+  const group: t.ChatModelGroup = { id: newId(), name: '', models: [seed], legacyNames: [] };
+  return { ...config, groups: [...config.groups, group] };
+}
+
+/** Move a group one slot up (-1) or down (+1). Cosmetic — only reorders the advertised models.default. */
+export function moveGroup(
+  config: t.ChatRoutingConfig,
+  index: number,
+  direction: -1 | 1,
+): t.ChatRoutingConfig {
+  const target = index + direction;
+  if (target < 0 || target >= config.groups.length) return config;
+  const groups = [...config.groups];
+  [groups[index], groups[target]] = [groups[target]!, groups[index]!];
+  return { ...config, groups };
+}
+
+/**
+ * Delete a group. When it was the default, `newDefaultId` becomes the new default. When `foldIntoId` is
+ * given, the deleted group's name + legacy names are folded into that group's legacyNames (deduped, and
+ * never shadowing that group's own live name) so anything still referencing the old name keeps routing.
+ */
+export function deleteGroup(
+  config: t.ChatRoutingConfig,
+  targetId: string,
+  opts: { newDefaultId?: string; foldIntoId?: string },
+): t.ChatRoutingConfig {
+  const target = config.groups.find((group) => group.id === targetId);
+  if (!target) return config;
+  const foldNames = [target.name.trim(), ...target.legacyNames].filter(Boolean);
+  const groups = config.groups
+    .filter((group) => group.id !== targetId)
+    .map((group) => {
+      if (opts.foldIntoId && group.id === opts.foldIntoId) {
+        const merged = new Set([...group.legacyNames, ...foldNames]);
+        merged.delete(group.name.trim());
+        return { ...group, legacyNames: [...merged] };
+      }
+      return group;
+    });
+  const defaultGroupId =
+    targetId === config.defaultGroupId
+      ? (opts.newDefaultId ?? config.defaultGroupId)
+      : config.defaultGroupId;
+  return { ...config, groups, defaultGroupId };
+}

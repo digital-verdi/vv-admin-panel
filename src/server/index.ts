@@ -4,6 +4,7 @@ export * from './config';
 export * from './groups';
 export * from './invites';
 export * from './llmProxy';
+export * from './llmRouterSync';
 export * from './roles';
 export * from './scopes';
 export * from './users';

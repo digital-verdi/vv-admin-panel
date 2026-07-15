@@ -1,19 +1,30 @@
 import { useState, useEffect } from 'react';
 import { Icon } from '@clickhouse/click-ui';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import type * as t from '@/types';
 import {
   llmProxyConfigQueryOptions,
   llmProxyModelsQueryOptions,
   saveLlmProxyConfigFn,
+  syncLibreChatForVardeFn,
+  validateGroupsInvariants,
+  extractVardeFragments,
+  baseConfigOptions,
 } from '@/server';
-import { TextField, NumberField, ToggleField, SelectField, ListField } from '@/components/configuration/fields';
-import { EmptyState, LoadingState } from '@/components/shared';
+import {
+  TextField,
+  NumberField,
+  ToggleField,
+  SelectField,
+  ListField,
+} from '@/components/configuration/fields';
+import { EmptyState, LoadingState, FormDialog } from '@/components/shared';
+import { ChatModelGroupsField } from './ChatModelGroupsField';
+import { SyncImpactPreview } from './SyncImpactPreview';
 import { notifySuccess, notifyError } from '@/utils';
-import { useCapabilities } from '@/hooks';
 import { SystemCapabilities } from '@/constants';
-import { ModelTierField } from './ModelTierField';
+import { useCapabilities } from '@/hooks';
 
 const FAIL_MODE_OPTIONS: t.SelectOption[] = [
   { label: 'Closed — block on PII-engine failure', value: 'closed' },
@@ -35,12 +46,13 @@ function FieldRow({
   return (
     <div className="flex flex-col gap-2 border-b border-(--cui-color-stroke-default) py-4 last:border-0 sm:flex-row sm:items-start sm:justify-between sm:gap-8">
       <div className="min-w-0 sm:max-w-80">
-        <label htmlFor={htmlFor} className="block text-sm font-medium text-(--cui-color-text-default)">
+        <label
+          htmlFor={htmlFor}
+          className="block text-sm font-medium text-(--cui-color-text-default)"
+        >
           {label}
         </label>
-        {description && (
-          <p className="mt-1 text-xs text-(--cui-color-text-muted)">{description}</p>
-        )}
+        {description && <p className="mt-1 text-xs text-(--cui-color-text-muted)">{description}</p>}
       </div>
       <div className="w-full sm:max-w-100">{children}</div>
     </div>
@@ -49,7 +61,10 @@ function FieldRow({
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section aria-label={title} className="rounded-lg border border-(--cui-color-stroke-default) p-4">
+    <section
+      aria-label={title}
+      className="rounded-lg border border-(--cui-color-stroke-default) p-4"
+    >
       <h2 className="mb-1 text-sm font-semibold text-(--cui-color-title-default)">{title}</h2>
       <div className="flex flex-col">{children}</div>
     </section>
@@ -65,13 +80,32 @@ export function LlmRouterPage() {
   const { data: catalog = [] } = useQuery({ ...llmProxyModelsQueryOptions, retry: false });
 
   const [form, setForm] = useState<t.LlmProxyConfigInput | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [versionConflict, setVersionConflict] = useState(false);
+  const [syncNotice, setSyncNotice] = useState<{ message: string; retry?: () => void } | null>(
+    null,
+  );
 
   useEffect(() => {
     if (config) {
-      const { openRouterKeyManaged, piiSecretsPresent, providerMode, updatedAt, updatedBy, dbBacked, ...input } = config;
+      const {
+        openRouterKeyManaged,
+        piiSecretsPresent,
+        providerMode,
+        configRevision,
+        proxyApiV2,
+        defaultGroup,
+        updatedAt,
+        updatedBy,
+        dbBacked,
+        ...input
+      } = config;
       void openRouterKeyManaged;
       void piiSecretsPresent;
       void providerMode;
+      void configRevision;
+      void proxyApiV2;
+      void defaultGroup;
       void updatedAt;
       void updatedBy;
       void dbBacked;
@@ -79,26 +113,20 @@ export function LlmRouterPage() {
     }
   }, [config]);
 
-  const saveMutation = useMutation({
-    mutationFn: (input: t.LlmProxyConfigInput) => saveLlmProxyConfigFn({ data: input }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['llm-proxy-config'] });
-      notifySuccess('LLM Router config saved and activated');
-    },
-    onError: (err: Error) => notifyError(err.message),
-  });
-
   if (isLoading || !form || !config) {
     return isError ? (
       <div className="p-6">
-        <EmptyState message={error instanceof Error ? error.message : 'Failed to load LLM Router config.'} />
+        <EmptyState
+          message={error instanceof Error ? error.message : 'Failed to load LLM Router config.'}
+        />
       </div>
     ) : (
       <LoadingState />
     );
   }
 
-  const update = (patch: Partial<t.LlmProxyConfigInput>) => setForm((prev) => (prev ? { ...prev, ...patch } : prev));
+  const update = (patch: Partial<t.LlmProxyConfigInput>) =>
+    setForm((prev) => (prev ? { ...prev, ...patch } : prev));
 
   // Catalog options for the searchable model pickers, de-duplicated by id (the OpenRouter catalog can
   // surface the same id twice). May be empty in local/mock mode — the combobox still lets an admin type
@@ -108,7 +136,13 @@ export function LlmRouterPage() {
   );
 
   const piiLocked = !config.piiSecretsPresent;
-  const busy = saveMutation.isPending;
+  const proxyReadOnly = !config.proxyApiV2;
+  const groupsDisabled = !canManage || proxyReadOnly;
+  const invariantErrors = validateGroupsInvariants(
+    form.chatRouting.groups,
+    form.chatRouting.defaultGroupId,
+  );
+  const canSave = canManage && !proxyReadOnly && invariantErrors.length === 0 && !busy;
 
   const keyStatusLabel = (() => {
     if (config.providerMode === 'mock') return 'Mock provider (local) — no key';
@@ -116,32 +150,96 @@ export function LlmRouterPage() {
     return 'Not set';
   })();
 
-  const tierRow = (
-    label: string,
-    key: 'chatModelsPremium' | 'chatModelsStandard' | 'chatModelsBasic',
-  ) => (
-    <FieldRow
-      label={label}
-      description="1 primary model + up to 2 fallbacks, in priority order."
-      htmlFor={`llm-${key}`}
-    >
-      <ModelTierField
-        id={`llm-${key}`}
-        values={form[key]}
-        onChange={(v) => update({ [key]: v } as Partial<t.LlmProxyConfigInput>)}
-        options={catalogOptions}
-        disabled={!canManage}
-        aria-label={label}
-      />
-    </FieldRow>
-  );
+  const runLibreChatSync = async (groups: t.ChatModelGroup[], defaultGroupId: string) => {
+    const base = await queryClient.fetchQuery(baseConfigOptions);
+    const expectedFragments = extractVardeFragments(base.config as Record<string, t.ConfigValue>);
+    const res = await syncLibreChatForVardeFn({
+      data: { groups, defaultGroupId, expectedFragments },
+    });
+    await queryClient.invalidateQueries({ queryKey: ['baseConfig'] });
+    if (res.status === 'ok' || res.status === 'noop') {
+      setSyncNotice(null);
+      notifySuccess(
+        res.unresolvedSpecs.length > 0
+          ? 'Routing saved. Some model specs are unresolved — review the impact preview.'
+          : 'Routing saved and LibreChat synced.',
+      );
+      return;
+    }
+    if (res.status === 'drift') {
+      setSyncNotice({
+        message:
+          'Routing saved, but the LibreChat config changed since the preview. Retry the LibreChat sync.',
+        retry: () => void retrySync(groups, defaultGroupId),
+      });
+      return;
+    }
+    setSyncNotice({
+      message:
+        res.status === 'endpoint-missing'
+          ? 'Routing saved. No “Varde” endpoint found in LibreChat — the LibreChat sync was skipped.'
+          : 'Routing saved. Multiple “Varde” endpoints found — resolve the duplicate in the Configuration editor.',
+    });
+  };
+
+  const retrySync = async (groups: t.ChatModelGroup[], defaultGroupId: string) => {
+    setBusy(true);
+    try {
+      await runLibreChatSync(groups, defaultGroupId);
+    } catch (err) {
+      setSyncNotice({
+        message: err instanceof Error ? err.message : 'LibreChat sync failed.',
+        retry: () => void retrySync(groups, defaultGroupId),
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleSave = async () => {
+    // Normalize: trim names + drop empty model rows so the proxy's per-group `min(1)` never trips.
+    const groups = form.chatRouting.groups.map((g) => ({
+      ...g,
+      name: g.name.trim(),
+      models: g.models.filter(Boolean),
+    }));
+    const chatRouting: t.ChatRoutingConfig = { ...form.chatRouting, groups };
+    const errors = validateGroupsInvariants(groups, chatRouting.defaultGroupId);
+    if (errors.length > 0) {
+      notifyError(errors[0]!);
+      return;
+    }
+    setBusy(true);
+    setSyncNotice(null);
+    try {
+      // Proxy first: it accepts both current + legacy names, so a later LibreChat-sync failure never breaks routing.
+      const proxyRes = await saveLlmProxyConfigFn({
+        data: { ...form, chatRouting, isActive: true, expectedRevision: config.configRevision },
+      });
+      if (proxyRes.status === 'version-mismatch') {
+        await queryClient.invalidateQueries({ queryKey: ['llm-proxy-config'] });
+        setVersionConflict(true);
+        return;
+      }
+      await queryClient.invalidateQueries({ queryKey: ['llm-proxy-config'] });
+      await runLibreChatSync(groups, chatRouting.defaultGroupId);
+    } catch (err) {
+      notifyError(err instanceof Error ? err.message : 'Failed to save LLM Router config');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
-    <div role="region" aria-label="LLM Router" className="flex flex-1 flex-col gap-6 overflow-auto p-6">
+    <div
+      role="region"
+      aria-label="LLM Router"
+      className="flex flex-1 flex-col gap-6 overflow-auto p-6"
+    >
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm text-(--cui-color-text-muted)">
-          Configure the Varde LLM proxy (OpenRouter egress, model tiers, PII pseudonymization). Changes
-          take effect live on save — no redeploy.
+          Configure the Varde LLM proxy (OpenRouter egress, chat-model groups, PII
+          pseudonymization). Changes take effect live on save — no redeploy.
         </p>
         <span
           className={
@@ -153,6 +251,19 @@ export function LlmRouterPage() {
           {config.isActive ? 'Active' : 'Not active'}
         </span>
       </div>
+
+      {proxyReadOnly && (
+        <div
+          role="alert"
+          className="flex items-start gap-2 rounded-lg border border-(--cui-color-stroke-warning) bg-(--cui-color-background-warning) p-3 text-sm text-(--cui-color-text-warning)"
+        >
+          <Icon name="warning" size="sm" />
+          <span>
+            Proxy upgrade pending — this vv-llm-proxy still runs the legacy tier API. Dynamic
+            chat-model groups are shown read-only until the proxy is upgraded to admin API v2.
+          </span>
+        </div>
+      )}
 
       <Section title="OpenRouter">
         <FieldRow
@@ -174,7 +285,11 @@ export function LlmRouterPage() {
             aria-label="OpenRouter base URL"
           />
         </FieldRow>
-        <FieldRow label="Referer" description="Optional HTTP-Referer sent to OpenRouter." htmlFor="llm-referer">
+        <FieldRow
+          label="Referer"
+          description="Optional HTTP-Referer sent to OpenRouter."
+          htmlFor="llm-referer"
+        >
           <TextField
             id="llm-referer"
             type="url"
@@ -184,7 +299,11 @@ export function LlmRouterPage() {
             aria-label="OpenRouter referer"
           />
         </FieldRow>
-        <FieldRow label="Title" description="Optional X-Title sent to OpenRouter." htmlFor="llm-title">
+        <FieldRow
+          label="Title"
+          description="Optional X-Title sent to OpenRouter."
+          htmlFor="llm-title"
+        >
           <TextField
             id="llm-title"
             value={form.openrouterTitle ?? ''}
@@ -195,10 +314,31 @@ export function LlmRouterPage() {
         </FieldRow>
       </Section>
 
-      <Section title="Chat models">
-        {tierRow('Premium', 'chatModelsPremium')}
-        {tierRow('Standard', 'chatModelsStandard')}
-        {tierRow('Basic', 'chatModelsBasic')}
+      <Section title="Chat model groups">
+        <p className="mb-3 text-xs text-(--cui-color-text-muted)">
+          Each group has an editable name (sent to the model as the selected “model”), 1 primary +
+          up to 2 fallbacks, and optional legacy names kept routable after a rename. The default
+          group drives LibreChat&apos;s title generation and default spec.
+        </p>
+        <ChatModelGroupsField
+          value={form.chatRouting}
+          options={catalogOptions}
+          disabled={groupsDisabled}
+          onChange={(chatRouting) => update({ chatRouting })}
+        />
+        {invariantErrors.length > 0 && !groupsDisabled && (
+          <ul
+            role="alert"
+            className="mt-3 flex flex-col gap-1 text-xs text-(--cui-color-text-danger)"
+          >
+            {invariantErrors.map((message) => (
+              <li key={message}>{message}</li>
+            ))}
+          </ul>
+        )}
+        <div className="mt-3">
+          <SyncImpactPreview chatRouting={form.chatRouting} />
+        </div>
       </Section>
 
       <Section title="Embeddings">
@@ -222,7 +362,11 @@ export function LlmRouterPage() {
             aria-label="Allowed embedding models"
           />
         </FieldRow>
-        <FieldRow label="Embedding dimensions" description="Optional default output dimensions." htmlFor="llm-embedding-dims">
+        <FieldRow
+          label="Embedding dimensions"
+          description="Optional default output dimensions."
+          htmlFor="llm-embedding-dims"
+        >
           <NumberField
             id="llm-embedding-dims"
             value={form.defaultEmbeddingDimensions ?? undefined}
@@ -246,7 +390,11 @@ export function LlmRouterPage() {
             aria-label="Request timeout in milliseconds"
           />
         </FieldRow>
-        <FieldRow label="Prompt caching" description="Send provider cache-control breakpoints where supported." htmlFor="llm-prompt-cache">
+        <FieldRow
+          label="Prompt caching"
+          description="Send provider cache-control breakpoints where supported."
+          htmlFor="llm-prompt-cache"
+        >
           <ToggleField
             id="llm-prompt-cache"
             checked={form.promptCacheEnabled}
@@ -275,7 +423,11 @@ export function LlmRouterPage() {
             aria-label="Enable PII pseudonymization"
           />
         </FieldRow>
-        <FieldRow label="Failure mode" description="What to do when the PII engine is unavailable." htmlFor="llm-pii-failmode">
+        <FieldRow
+          label="Failure mode"
+          description="What to do when the PII engine is unavailable."
+          htmlFor="llm-pii-failmode"
+        >
           <SelectField
             id="llm-pii-failmode"
             value={form.piiFailMode}
@@ -287,6 +439,25 @@ export function LlmRouterPage() {
         </FieldRow>
       </Section>
 
+      {syncNotice && (
+        <div
+          role="alert"
+          className="flex items-center justify-between gap-3 rounded-lg border border-(--cui-color-stroke-warning) bg-(--cui-color-background-warning) p-3 text-sm text-(--cui-color-text-warning)"
+        >
+          <span>{syncNotice.message}</span>
+          {syncNotice.retry && (
+            <button
+              type="button"
+              onClick={syncNotice.retry}
+              disabled={busy}
+              className="shrink-0 rounded-md border border-(--cui-color-stroke-default) px-3 py-1.5 text-xs font-medium hover:bg-(--cui-color-background-muted) disabled:opacity-50"
+            >
+              Retry LibreChat sync
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="flex items-center justify-between gap-3">
         <p className="text-xs text-(--cui-color-text-muted)">
           {config.updatedAt
@@ -295,19 +466,9 @@ export function LlmRouterPage() {
         </p>
         <button
           type="button"
-          onClick={() =>
-            saveMutation.mutate({
-              ...form,
-              isActive: true,
-              // Drop any empty tier row (a seeded row the admin left unfilled) so the PUT can't fail the
-              // proxy's `min(1)` element check and silently lose the whole save.
-              chatModelsPremium: form.chatModelsPremium.filter(Boolean),
-              chatModelsStandard: form.chatModelsStandard.filter(Boolean),
-              chatModelsBasic: form.chatModelsBasic.filter(Boolean),
-            })
-          }
-          disabled={!canManage || busy}
-          aria-disabled={!canManage || busy || undefined}
+          onClick={() => void handleSave()}
+          disabled={!canSave}
+          aria-disabled={!canSave || undefined}
           className="flex shrink-0 items-center gap-1.5 rounded-lg border border-(--cui-color-stroke-default) bg-(--cui-color-background-accent-default) px-4 py-2 text-sm font-medium text-(--cui-color-text-on-primary) transition-colors hover:bg-(--cui-color-background-accent-hover) disabled:cursor-not-allowed disabled:opacity-50"
         >
           <span aria-hidden="true">
@@ -316,6 +477,19 @@ export function LlmRouterPage() {
           {busy ? 'Saving…' : 'Save and activate'}
         </button>
       </div>
+
+      <FormDialog
+        open={versionConflict}
+        title="Config changed elsewhere"
+        submitLabel="OK"
+        onSubmit={() => setVersionConflict(false)}
+        onClose={() => setVersionConflict(false)}
+      >
+        <p className="text-sm text-(--cui-color-text-default)">
+          The LLM Router config was changed by another writer. We reloaded the latest version —
+          review your changes and save again.
+        </p>
+      </FormDialog>
     </div>
   );
 }

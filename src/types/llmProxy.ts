@@ -2,10 +2,22 @@ export type PiiFailMode = 'closed' | 'open';
 
 export type LlmProviderMode = 'openrouter' | 'mock';
 
+/** A provider the proxy can route to. Chat-model groups are provider-explicit (routing v3). */
+export type ModelProvider = 'openrouter' | 'mistral' | 'mock';
+
+/** A provider-explicit model reference — the proxy wire shape (routing v3). In the panel's UI state these
+ *  are encoded as the composite string `"<provider>:<model>"` (a `ChatModelGroup.models` entry) and only
+ *  converted to/from `ModelRef` at the proxy-server boundary (see `server/llmProxy.ts`). */
+export interface ModelRef {
+  provider: ModelProvider;
+  model: string;
+}
+
 /**
  * A dynamic chat-model group. `id` is a stable, opaque slug (never sent as `model`); `name` is the
  * editable slug LibreChat advertises + sends verbatim as `model`; `models` is 1 primary + up to 2
- * fallbacks (priority order); `legacyNames` are former names still routable after a rename/delete.
+ * fallbacks (priority order), each a composite `"<provider>:<model>"` key ({@link ModelRef}); `legacyNames`
+ * are former names still routable after a rename/delete.
  */
 export interface ChatModelGroup {
   id: string;
@@ -49,6 +61,8 @@ export interface LlmProxyConfigInput {
 export interface LlmProxyConfig extends LlmProxyConfigInput {
   /** Whether the proxy env has an OpenRouter key (never the value) — the UI shows the key as managed. */
   openRouterKeyManaged: boolean;
+  /** Whether the proxy env has a Mistral key (never the value) — the UI shows the Mistral tile as managed. */
+  mistralKeyManaged: boolean;
   /** Whether the crypto secrets (KEK/HKDF/DB) are present — PII can only be enabled when true. */
   piiSecretsPresent: boolean;
   providerMode: LlmProviderMode;
@@ -99,6 +113,15 @@ export type SyncLibreChatResult =
 export interface LlmProxyModel {
   id: string;
   name: string;
+  /** Which provider owns this catalog entry — the model id is unique only WITHIN a provider. */
+  provider: ModelProvider;
   supportsVision: boolean;
-  supportsReasoning: boolean;
+  /** `boolean` when the catalog gives a signal; `'unknown'` when it does not (e.g. Mistral). */
+  supportsReasoning: boolean | 'unknown';
+}
+
+/** Per-provider catalog fetch status from `/admin/models` — lets the UI show a provider as down. */
+export interface LlmProviderStatus {
+  provider: ModelProvider;
+  ok: boolean;
 }

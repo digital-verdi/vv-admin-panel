@@ -90,6 +90,7 @@ export function LlmRouterPage() {
     if (config) {
       const {
         openRouterKeyManaged,
+        mistralKeyManaged,
         piiSecretsPresent,
         providerMode,
         configRevision,
@@ -101,6 +102,7 @@ export function LlmRouterPage() {
         ...input
       } = config;
       void openRouterKeyManaged;
+      void mistralKeyManaged;
       void piiSecretsPresent;
       void providerMode;
       void configRevision;
@@ -128,11 +130,17 @@ export function LlmRouterPage() {
   const update = (patch: Partial<t.LlmProxyConfigInput>) =>
     setForm((prev) => (prev ? { ...prev, ...patch } : prev));
 
-  // Catalog options for the searchable model pickers, de-duplicated by id (the OpenRouter catalog can
-  // surface the same id twice). May be empty in local/mock mode — the combobox still lets an admin type
-  // a custom model id via allowCreateOption.
+  // Catalog options for the searchable model pickers. Values are the composite `provider:model` key so a
+  // group model carries its provider (routing v3); the label shows the provider so an admin can tell an
+  // OpenRouter model from a Mistral one. De-duplicated by composite key (an id is unique only per provider).
+  // May be empty in local/mock mode — the combobox still lets an admin type a custom id via allowCreateOption.
   const catalogOptions: t.SelectOption[] = Array.from(
-    new Map(catalog.map((m) => [m.id, { label: m.name, value: m.id }])).values(),
+    new Map(
+      catalog.map((m) => {
+        const value = `${m.provider}:${m.id}`;
+        return [value, { label: `${m.name} · ${m.provider}`, value }];
+      }),
+    ).values(),
   );
 
   const piiLocked = !config.piiSecretsPresent;
@@ -148,6 +156,12 @@ export function LlmRouterPage() {
     if (config.providerMode === 'mock') return 'Mock provider (local) — no key';
     if (config.openRouterKeyManaged) return '•••••••••••• Managed in Secret Manager';
     return 'Not set';
+  })();
+
+  const mistralStatusLabel = (() => {
+    if (config.providerMode === 'mock') return 'Mock provider (local) — no key';
+    if (config.mistralKeyManaged) return '•••••••••••• Managed in Secret Manager';
+    return 'Not configured — Mistral models are unavailable until the key is seeded';
   })();
 
   const runLibreChatSync = async (groups: t.ChatModelGroup[], defaultGroupId: string) => {
@@ -311,6 +325,18 @@ export function LlmRouterPage() {
             disabled={!canManage}
             aria-label="OpenRouter title"
           />
+        </FieldRow>
+      </Section>
+
+      <Section title="Mistral">
+        <FieldRow
+          label="API key"
+          description="Optional second provider. Managed in Secret Manager — never editable or displayed here. When configured, groups can route models tagged “mistral”."
+        >
+          <div className="flex items-center gap-2 rounded-md border border-(--cui-color-stroke-default) bg-(--cui-color-background-muted) px-3 py-2 text-sm text-(--cui-color-text-muted)">
+            <Icon name={config.mistralKeyManaged ? 'lock' : 'warning'} size="xs" />
+            <span>{mistralStatusLabel}</span>
+          </div>
         </FieldRow>
       </Section>
 

@@ -19,6 +19,40 @@ export const MAX_MODELS_PER_GROUP = 3;
 export const MAX_GROUPS = 24;
 const MAX_REQUEST_TIMEOUT_MS = 600_000;
 
+const MODEL_PROVIDERS: readonly t.ModelProvider[] = ['openrouter', 'mistral', 'mock'];
+
+/**
+ * Decode a UI composite model key `"<provider>:<model>"` into the proxy wire `ModelRef`. A value with no
+ * recognized provider prefix (a custom id typed via the combobox) defaults to OpenRouter — always present,
+ * the common case. Split on the FIRST `:` only (OpenRouter ids use `/`, so the model part is preserved).
+ */
+export function compositeToRef(composite: string): t.ModelRef {
+  const i = composite.indexOf(':');
+  if (i > 0) {
+    const provider = composite.slice(0, i) as t.ModelProvider;
+    if (MODEL_PROVIDERS.includes(provider)) return { provider, model: composite.slice(i + 1) };
+  }
+  return { provider: 'openrouter', model: composite };
+}
+
+/** Encode a proxy wire `ModelRef` as the UI composite key. */
+export function refToComposite(ref: t.ModelRef): string {
+  return `${ref.provider}:${ref.model}`;
+}
+
+/** The proxy wire shape for a routing group (routing v3): provider-explicit `ModelRef`s. */
+interface WireGroup {
+  id: string;
+  name: string;
+  models: t.ModelRef[];
+  legacyNames: string[];
+}
+interface WireRouting {
+  version: number;
+  defaultGroupId: string;
+  groups: WireGroup[];
+}
+
 /**
  * Pure cross-group invariant check shared by the PUT schema (below) and the UI (to disable + explain Save
  * before any network call). Returns human-readable errors — empty means valid.
@@ -108,6 +142,7 @@ interface RawProxyCommon {
   piiEnabled: boolean;
   piiFailMode: t.PiiFailMode;
   openRouterKeyManaged: boolean;
+  mistralKeyManaged: boolean;
   piiSecretsPresent: boolean;
   providerMode: t.LlmProviderMode;
   updatedAt: string | null;
@@ -116,7 +151,7 @@ interface RawProxyCommon {
 }
 
 interface RawProxyV2 extends RawProxyCommon {
-  chatRouting: t.ChatRoutingConfig;
+  chatRouting: WireRouting;
   defaultGroup: { id: string; name: string };
   configRevision: number;
 }
@@ -135,12 +170,28 @@ interface RawProxyV1 extends RawProxyCommon {
 export function normalizeProxyConfig(raw: unknown): t.LlmProxyConfig {
   const value = raw as Partial<RawProxyV2 & RawProxyV1>;
   if (value.chatRouting && typeof value.configRevision === 'number') {
-    return { ...(value as RawProxyV2), proxyApiV2: true };
+    const wire = value as RawProxyV2;
+    // The proxy sends provider-explicit ModelRefs; the UI works in composite `provider:model` keys.
+    const groups: t.ChatModelGroup[] = wire.chatRouting.groups.map((group) => ({
+      id: group.id,
+      name: group.name,
+      legacyNames: group.legacyNames,
+      models: group.models.map(refToComposite),
+    }));
+    return {
+      ...wire,
+      chatRouting: { ...wire.chatRouting, groups },
+      mistralKeyManaged: wire.mistralKeyManaged ?? false,
+      proxyApiV2: true,
+    };
   }
+  // An old v1 proxy returns bare-string (OpenRouter) tier arrays → composite-tag them for the UI.
+  const orRefs = (models: string[] | undefined): string[] =>
+    (models ?? []).map((m) => `openrouter:${m}`);
   const groups: t.ChatModelGroup[] = [
-    { id: 'premium', name: 'premium', models: value.chatModelsPremium ?? [], legacyNames: [] },
-    { id: 'standard', name: 'standard', models: value.chatModelsStandard ?? [], legacyNames: [] },
-    { id: 'basic', name: 'basic', models: value.chatModelsBasic ?? [], legacyNames: [] },
+    { id: 'premium', name: 'premium', models: orRefs(value.chatModelsPremium), legacyNames: [] },
+    { id: 'standard', name: 'standard', models: orRefs(value.chatModelsStandard), legacyNames: [] },
+    { id: 'basic', name: 'basic', models: orRefs(value.chatModelsBasic), legacyNames: [] },
   ];
   const { chatModelsPremium, chatModelsStandard, chatModelsBasic, ...common } = value as RawProxyV1;
   void chatModelsPremium;
@@ -148,7 +199,8 @@ export function normalizeProxyConfig(raw: unknown): t.LlmProxyConfig {
   void chatModelsBasic;
   return {
     ...common,
-    chatRouting: { version: 2, defaultGroupId: 'standard', groups },
+    mistralKeyManaged: common.mistralKeyManaged ?? false,
+    chatRouting: { version: 3, defaultGroupId: 'standard', groups },
     defaultGroup: { id: 'standard', name: 'standard' },
     configRevision: -1,
     proxyApiV2: false,
@@ -191,9 +243,21 @@ export const llmProxyModelsQueryOptions = queryOptions({
 export const saveLlmProxyConfigFn = createServerFn({ method: 'POST' })
   .inputValidator(saveInputSchema)
   .handler(async ({ data }): Promise<t.SaveLlmProxyResult> => {
+    // Convert the UI composite `provider:model` keys to provider-explicit ModelRefs + stamp routing v3
+    // (the proxy's PUT requires version 3). Everything else passes through unchanged.
+    const chatRouting: WireRouting = {
+      version: 3,
+      defaultGroupId: data.chatRouting.defaultGroupId,
+      groups: data.chatRouting.groups.map((group) => ({
+        id: group.id,
+        name: group.name,
+        legacyNames: group.legacyNames,
+        models: group.models.map(compositeToRef),
+      })),
+    };
     const response = await proxyFetch('/admin/config', {
       method: 'PUT',
-      body: JSON.stringify(data),
+      body: JSON.stringify({ ...data, chatRouting }),
     });
     if (response.status === 409) {
       const body = await response.json().catch(() => ({}));

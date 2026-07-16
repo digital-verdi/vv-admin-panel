@@ -46,10 +46,13 @@ The **LLM Router** page manages the Varde `vv-llm-proxy` via its admin API (`/ad
   primary + up to 2 fallbacks**, and **legacy names** kept routable after a rename so nothing breaks.
   Exactly one **default group** drives LibreChat's title generation + default model spec.
 - **Provider-explicit models (multi-provider)** — Each model in a group carries its **provider** (routing
-  v3): the picker lists the merged **OpenRouter + Mistral** catalog, each option labelled with its provider,
-  so a group can mix providers (e.g. a Mistral primary with an OpenRouter fallback). A **Mistral** status
-  tile shows whether the proxy has a Mistral key (managed in Secret Manager — never entered here); when it
-  isn't configured, Mistral models are unavailable and the proxy runs OpenRouter-only.
+  v3): the picker lists the merged **OpenRouter + Mistral** catalog, every option shown in the canonical
+  **`<provider>:<model>`** format (e.g. `openrouter:anthropic/claude-3.7-sonnet`, `mistral:pixtral-12b-2409`)
+  for both the dropdown and the selected value, so a group can mix providers (e.g. a Mistral primary with an
+  OpenRouter fallback). The **OpenRouter** and **Mistral** provider cards are grouped under an **AI Providers**
+  heading; a **Mistral** status tile shows whether the proxy has a Mistral key (managed in Secret Manager —
+  never entered here); when it isn't configured, Mistral models are unavailable and the proxy runs
+  OpenRouter-only.
 - **Safe rename/delete** — Renaming keeps the old name routable via legacy names; deleting a group requires
   choosing a replacement default (when it was the default) and offers to fold its names into another group.
 - **LibreChat sync** — On save, the `Varde` endpoint's `models.default` + `titleModel` and the Varde model

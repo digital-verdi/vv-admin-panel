@@ -23,6 +23,7 @@ import { EmptyState, LoadingState, FormDialog } from '@/components/shared';
 import { ChatModelGroupsField } from './ChatModelGroupsField';
 import { SyncImpactPreview } from './SyncImpactPreview';
 import { notifySuccess, notifyError } from '@/utils';
+import { buildModelOptions } from './operations';
 import { SystemCapabilities } from '@/constants';
 import { useCapabilities } from '@/hooks';
 
@@ -59,13 +60,24 @@ function FieldRow({
   );
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function Section({
+  title,
+  level = 2,
+  children,
+}: {
+  title: string;
+  level?: 2 | 3;
+  children: ReactNode;
+}) {
+  const Heading = level === 3 ? 'h3' : 'h2';
   return (
     <section
       aria-label={title}
       className="rounded-lg border border-(--cui-color-stroke-default) p-4"
     >
-      <h2 className="mb-1 text-sm font-semibold text-(--cui-color-title-default)">{title}</h2>
+      <Heading className="mb-1 text-sm font-semibold text-(--cui-color-title-default)">
+        {title}
+      </Heading>
       <div className="flex flex-col">{children}</div>
     </section>
   );
@@ -130,18 +142,10 @@ export function LlmRouterPage() {
   const update = (patch: Partial<t.LlmProxyConfigInput>) =>
     setForm((prev) => (prev ? { ...prev, ...patch } : prev));
 
-  // Catalog options for the searchable model pickers. Values are the composite `provider:model` key so a
-  // group model carries its provider (routing v3); the label shows the provider so an admin can tell an
-  // OpenRouter model from a Mistral one. De-duplicated by composite key (an id is unique only per provider).
-  // May be empty in local/mock mode — the combobox still lets an admin type a custom id via allowCreateOption.
-  const catalogOptions: t.SelectOption[] = Array.from(
-    new Map(
-      catalog.map((m) => {
-        const value = `${m.provider}:${m.id}`;
-        return [value, { label: `${m.name} · ${m.provider}`, value }];
-      }),
-    ).values(),
-  );
+  // Catalog options for the searchable model pickers: both value AND label are the composite
+  // `<provider>:<model>` key (routing v3), so options and the selected value render one consistent format.
+  // Empty in local/mock mode — the combobox still lets an admin type a custom id via allowCreateOption.
+  const catalogOptions = buildModelOptions(catalog);
 
   const piiLocked = !config.piiSecretsPresent;
   const proxyReadOnly = !config.proxyApiV2;
@@ -279,66 +283,70 @@ export function LlmRouterPage() {
         </div>
       )}
 
-      <Section title="OpenRouter">
-        <FieldRow
-          label="API key"
-          description="Managed in Secret Manager — never editable or displayed here."
-        >
-          <div className="flex items-center gap-2 rounded-md border border-(--cui-color-stroke-default) bg-(--cui-color-background-muted) px-3 py-2 text-sm text-(--cui-color-text-muted)">
-            <Icon name="lock" size="xs" />
-            <span>{keyStatusLabel}</span>
-          </div>
-        </FieldRow>
-        <FieldRow label="Base URL" htmlFor="llm-base-url">
-          <TextField
-            id="llm-base-url"
-            type="url"
-            value={form.openrouterBaseUrl}
-            onChange={(v) => update({ openrouterBaseUrl: v })}
-            disabled={!canManage}
-            aria-label="OpenRouter base URL"
-          />
-        </FieldRow>
-        <FieldRow
-          label="Referer"
-          description="Optional HTTP-Referer sent to OpenRouter."
-          htmlFor="llm-referer"
-        >
-          <TextField
-            id="llm-referer"
-            type="url"
-            value={form.openrouterReferer ?? ''}
-            onChange={(v) => update({ openrouterReferer: v.trim() === '' ? null : v })}
-            disabled={!canManage}
-            aria-label="OpenRouter referer"
-          />
-        </FieldRow>
-        <FieldRow
-          label="Title"
-          description="Optional X-Title sent to OpenRouter."
-          htmlFor="llm-title"
-        >
-          <TextField
-            id="llm-title"
-            value={form.openrouterTitle ?? ''}
-            onChange={(v) => update({ openrouterTitle: v.trim() === '' ? null : v })}
-            disabled={!canManage}
-            aria-label="OpenRouter title"
-          />
-        </FieldRow>
-      </Section>
+      <div className="flex flex-col gap-4">
+        <h2 className="text-base font-medium text-(--cui-color-text-default)">AI Providers</h2>
 
-      <Section title="Mistral">
-        <FieldRow
-          label="API key"
-          description="Optional second provider. Managed in Secret Manager — never editable or displayed here. When configured, groups can route models tagged “mistral”."
-        >
-          <div className="flex items-center gap-2 rounded-md border border-(--cui-color-stroke-default) bg-(--cui-color-background-muted) px-3 py-2 text-sm text-(--cui-color-text-muted)">
-            <Icon name={config.mistralKeyManaged ? 'lock' : 'warning'} size="xs" />
-            <span>{mistralStatusLabel}</span>
-          </div>
-        </FieldRow>
-      </Section>
+        <Section title="OpenRouter" level={3}>
+          <FieldRow
+            label="API key"
+            description="Managed in Secret Manager — never editable or displayed here."
+          >
+            <div className="flex items-center gap-2 rounded-md border border-(--cui-color-stroke-default) bg-(--cui-color-background-muted) px-3 py-2 text-sm text-(--cui-color-text-muted)">
+              <Icon name="lock" size="xs" />
+              <span>{keyStatusLabel}</span>
+            </div>
+          </FieldRow>
+          <FieldRow label="Base URL" htmlFor="llm-base-url">
+            <TextField
+              id="llm-base-url"
+              type="url"
+              value={form.openrouterBaseUrl}
+              onChange={(v) => update({ openrouterBaseUrl: v })}
+              disabled={!canManage}
+              aria-label="OpenRouter base URL"
+            />
+          </FieldRow>
+          <FieldRow
+            label="Referer"
+            description="Optional HTTP-Referer sent to OpenRouter."
+            htmlFor="llm-referer"
+          >
+            <TextField
+              id="llm-referer"
+              type="url"
+              value={form.openrouterReferer ?? ''}
+              onChange={(v) => update({ openrouterReferer: v.trim() === '' ? null : v })}
+              disabled={!canManage}
+              aria-label="OpenRouter referer"
+            />
+          </FieldRow>
+          <FieldRow
+            label="Title"
+            description="Optional X-Title sent to OpenRouter."
+            htmlFor="llm-title"
+          >
+            <TextField
+              id="llm-title"
+              value={form.openrouterTitle ?? ''}
+              onChange={(v) => update({ openrouterTitle: v.trim() === '' ? null : v })}
+              disabled={!canManage}
+              aria-label="OpenRouter title"
+            />
+          </FieldRow>
+        </Section>
+
+        <Section title="Mistral" level={3}>
+          <FieldRow
+            label="API key"
+            description="Optional second provider. Managed in Secret Manager — never editable or displayed here. When configured, groups can route models tagged “mistral”."
+          >
+            <div className="flex items-center gap-2 rounded-md border border-(--cui-color-stroke-default) bg-(--cui-color-background-muted) px-3 py-2 text-sm text-(--cui-color-text-muted)">
+              <Icon name={config.mistralKeyManaged ? 'lock' : 'warning'} size="xs" />
+              <span>{mistralStatusLabel}</span>
+            </div>
+          </FieldRow>
+        </Section>
+      </div>
 
       <Section title="Chat model groups">
         <p className="mb-3 text-xs text-(--cui-color-text-muted)">

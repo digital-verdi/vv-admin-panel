@@ -1,5 +1,23 @@
 import type * as t from '@/types';
 
+/**
+ * Build the model-picker options from the merged provider catalog. Both `value` AND `label` are the
+ * canonical composite `<provider>:<model>` key — the raw provider id, no friendly display name and no
+ * trailing `· provider` tag (e.g. `openrouter:anthropic/claude-3.7-sonnet`, `mistral:pixtral-12b-2409`) —
+ * so the dropdown options and the selected value render one consistent, predictable format. De-duplicated
+ * by the composite key (a model id is unique only within a provider).
+ */
+export function buildModelOptions(catalog: t.LlmProxyModel[]): t.SelectOption[] {
+  return Array.from(
+    new Map(
+      catalog.map((m) => {
+        const value = `${m.provider}:${m.id}`;
+        return [value, { label: value, value }];
+      }),
+    ).values(),
+  );
+}
+
 /** Append a new empty group, seeded with the first catalog model not already used by another group. */
 export function addGroup(
   config: t.ChatRoutingConfig,

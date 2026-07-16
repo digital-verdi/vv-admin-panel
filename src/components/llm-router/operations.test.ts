@@ -1,6 +1,61 @@
 import { describe, it, expect } from 'vitest';
 import type * as t from '@/types';
-import { addGroup, moveGroup, deleteGroup } from './operations';
+import { buildModelOptions, addGroup, moveGroup, deleteGroup } from './operations';
+
+function model(over: Partial<t.LlmProxyModel>): t.LlmProxyModel {
+  return {
+    id: 'x',
+    name: 'Friendly Name',
+    provider: 'openrouter',
+    supportsVision: false,
+    supportsReasoning: 'unknown',
+    ...over,
+  };
+}
+
+describe('buildModelOptions', () => {
+  it('formats every option as <provider>:<model> for value AND label — no friendly name, no provider tag', () => {
+    const opts = buildModelOptions([
+      model({
+        provider: 'openrouter',
+        id: 'anthropic/claude-3.7-sonnet',
+        name: 'Claude 3.7 Sonnet',
+      }),
+      model({ provider: 'openrouter', id: 'MoonshotAI/Kimi-K3', name: 'MoonshotAI: Kimi K3' }),
+      model({ provider: 'mistral', id: 'pixtral-12b-2409', name: 'Pixtral 12B' }),
+    ]);
+    expect(opts).toEqual([
+      {
+        label: 'openrouter:anthropic/claude-3.7-sonnet',
+        value: 'openrouter:anthropic/claude-3.7-sonnet',
+      },
+      { label: 'openrouter:MoonshotAI/Kimi-K3', value: 'openrouter:MoonshotAI/Kimi-K3' },
+      { label: 'mistral:pixtral-12b-2409', value: 'mistral:pixtral-12b-2409' },
+    ]);
+    // No friendly name / capitalization / trailing `· provider` tag survives.
+    for (const o of opts) {
+      expect(o.label).toBe(o.value);
+      expect(o.label).not.toContain(' · ');
+      expect(o.label).not.toContain(' ');
+    }
+  });
+
+  it('preserves the slash in OpenRouter ids and the bare id for Mistral', () => {
+    const [or] = buildModelOptions([model({ provider: 'openrouter', id: 'org/model-v2' })]);
+    expect(or!.value).toBe('openrouter:org/model-v2');
+    const [mi] = buildModelOptions([model({ provider: 'mistral', id: 'mistral-small-latest' })]);
+    expect(mi!.value).toBe('mistral:mistral-small-latest');
+  });
+
+  it('de-duplicates by the composite key (same id across providers stays distinct)', () => {
+    const opts = buildModelOptions([
+      model({ provider: 'openrouter', id: 'dup' }),
+      model({ provider: 'openrouter', id: 'dup', name: 'other name' }),
+      model({ provider: 'mistral', id: 'dup' }),
+    ]);
+    expect(opts.map((o) => o.value)).toEqual(['openrouter:dup', 'mistral:dup']);
+  });
+});
 
 function cfg(over: Partial<t.ChatRoutingConfig> = {}): t.ChatRoutingConfig {
   return {

@@ -23,6 +23,7 @@ import { EmptyState, LoadingState, FormDialog } from '@/components/shared';
 import { ChatModelGroupsField } from './ChatModelGroupsField';
 import { SyncImpactPreview } from './SyncImpactPreview';
 import { notifySuccess, notifyError } from '@/utils';
+import { buildModelOptions } from './operations';
 import { SystemCapabilities } from '@/constants';
 import { useCapabilities } from '@/hooks';
 
@@ -141,18 +142,10 @@ export function LlmRouterPage() {
   const update = (patch: Partial<t.LlmProxyConfigInput>) =>
     setForm((prev) => (prev ? { ...prev, ...patch } : prev));
 
-  // Catalog options for the searchable model pickers. Values are the composite `provider:model` key so a
-  // group model carries its provider (routing v3); the label shows the provider so an admin can tell an
-  // OpenRouter model from a Mistral one. De-duplicated by composite key (an id is unique only per provider).
-  // May be empty in local/mock mode — the combobox still lets an admin type a custom id via allowCreateOption.
-  const catalogOptions: t.SelectOption[] = Array.from(
-    new Map(
-      catalog.map((m) => {
-        const value = `${m.provider}:${m.id}`;
-        return [value, { label: `${m.name} · ${m.provider}`, value }];
-      }),
-    ).values(),
-  );
+  // Catalog options for the searchable model pickers: both value AND label are the composite
+  // `<provider>:<model>` key (routing v3), so options and the selected value render one consistent format.
+  // Empty in local/mock mode — the combobox still lets an admin type a custom id via allowCreateOption.
+  const catalogOptions = buildModelOptions(catalog);
 
   const piiLocked = !config.piiSecretsPresent;
   const proxyReadOnly = !config.proxyApiV2;

@@ -195,7 +195,7 @@ export function LlmRouterPage() {
     setSyncNotice({
       message:
         res.status === 'endpoint-missing'
-          ? 'Routing saved. No “Varde” endpoint found in LibreChat — the LibreChat sync was skipped.'
+          ? 'Routing saved. No Varde (vv-llm-proxy) endpoint found in the LibreChat config — the LibreChat sync was skipped.'
           : 'Routing saved. Multiple “Varde” endpoints found — resolve the duplicate in the Configuration editor.',
     });
   };

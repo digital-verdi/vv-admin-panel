@@ -551,10 +551,7 @@ function BooleanChip({ value }: { value: boolean }) {
   const localize = useLocalize();
   return (
     <span
-      className={cn(
-        'boolean-chip self-start',
-        value ? 'boolean-chip-true' : 'boolean-chip-false',
-      )}
+      className={cn('boolean-chip self-start', value ? 'boolean-chip-true' : 'boolean-chip-false')}
       aria-label={localize(value ? 'com_ui_true' : 'com_ui_false')}
     >
       {localize(value ? 'com_ui_true' : 'com_ui_false')}
@@ -651,9 +648,7 @@ export function NestedGroup({
           >
             <Icon name="chevron-right" size="xs" />
           </span>
-          <span className="text-sm font-medium text-(--cui-color-text-default)">
-            {label}
-          </span>
+          <span className="text-sm font-medium text-(--cui-color-text-default)">{label}</span>
           {totalCount > 0 && (
             <span
               className={cn(
@@ -858,6 +853,7 @@ function InlineFieldRenderer({
 /** Wraps a NestedGroup + InlineFieldRenderer, wiring the add-field trigger to the group header. */
 function NestedGroupWithAddField({
   label,
+  fieldKey,
   fields,
   parentValue,
   parentPath,
@@ -865,6 +861,7 @@ function NestedGroupWithAddField({
   disabled,
 }: {
   label: string;
+  fieldKey: string;
   fields: t.SchemaField[];
   parentValue: t.ConfigValue;
   parentPath: string;
@@ -873,6 +870,32 @@ function NestedGroupWithAddField({
 }) {
   const addFieldRef = useRef<(() => void) | null>(null);
   const localize = useLocalize();
+
+  // Fold each sub-field commit onto the LATEST nested-object value via a ref,
+  // updated both on commit (useEffect) and synchronously inside the handler, so
+  // multiple commits in one React batch accumulate instead of each rebuilding
+  // from the same stale `parentValue` (which would drop all but the last key).
+  // Mirrors ObjectEntryCard.handleFieldChange.
+  const valueRef = useRef(parentValue);
+  useEffect(() => {
+    valueRef.current = parentValue;
+  }, [parentValue]);
+
+  const handleChild = useCallback(
+    (path: string, value: t.ConfigValue) => {
+      const leafKey = path.split('.').pop() ?? path;
+      const current =
+        typeof valueRef.current === 'object' &&
+        valueRef.current !== null &&
+        !Array.isArray(valueRef.current)
+          ? (valueRef.current as Record<string, t.ConfigValue>)
+          : {};
+      const next = { ...current, [leafKey]: value };
+      valueRef.current = next;
+      onChange(fieldKey, next);
+    },
+    [onChange, fieldKey],
+  );
 
   // Static initial value: compute from schema + values so the button shows
   // before children mount (NestedGroup defers rendering when collapsed).
@@ -902,7 +925,7 @@ function NestedGroupWithAddField({
         fields={fields}
         parentValue={parentValue}
         parentPath={parentPath}
-        onChange={onChange}
+        onChange={handleChild}
         disabled={disabled}
         addFieldTriggerRef={addFieldRef}
         onHiddenFieldsChange={setHasHideable}
@@ -979,18 +1002,11 @@ export function renderInlineField(
       <NestedGroupWithAddField
         key={field.key}
         label={fieldLabel}
+        fieldKey={field.key}
         fields={field.children}
         parentValue={fieldValue}
         parentPath={`${parentPath}.${field.key}`}
-        onChange={(p, v) => {
-          const segments = p.split('.');
-          const leafKey = segments[segments.length - 1];
-          const current =
-            typeof fieldValue === 'object' && fieldValue !== null && !Array.isArray(fieldValue)
-              ? (fieldValue as Record<string, t.ConfigValue>)
-              : {};
-          onChange(field.key, { ...current, [leafKey]: v });
-        }}
+        onChange={onChange}
         disabled={disabled}
       />
     );

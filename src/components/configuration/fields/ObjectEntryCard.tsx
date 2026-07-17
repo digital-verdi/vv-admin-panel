@@ -32,7 +32,6 @@ export function ObjectEntryCard({
     if (isExpanded && !hasEverExpanded) setHasEverExpanded(true);
   }, [isExpanded, hasEverExpanded]);
 
-
   // Track whether renderFields registered an addFieldTrigger.
   // Runs every render because the ref is populated by children after mount.
   useEffect(() => {
@@ -61,17 +60,31 @@ export function ObjectEntryCard({
 
   const toggle = useCallback(() => setIsExpanded((prev) => !prev), []);
 
+  // Fold each field commit onto the LATEST entry value via a ref, updated both
+  // on commit (useEffect) and synchronously inside the handler. Rebuilding from
+  // the closure-captured `value` instead dropped every key but the last when two
+  // commits landed in one React batch (e.g. two blur events in a single tick,
+  // autofill, or paste), persisting an incomplete entry.
+  const valueRef = useRef(value);
+  useEffect(() => {
+    valueRef.current = value;
+  }, [value]);
+
   const handleFieldChange = useCallback(
     (fieldPath: string, fieldValue: t.ConfigValue) => {
       const current =
-        typeof value === 'object' && value !== null && !Array.isArray(value)
-          ? (value as Record<string, t.ConfigValue>)
+        typeof valueRef.current === 'object' &&
+        valueRef.current !== null &&
+        !Array.isArray(valueRef.current)
+          ? (valueRef.current as Record<string, t.ConfigValue>)
           : {};
       const segments = fieldPath.split('.');
       const leafKey = segments[segments.length - 1];
-      onValueChange({ ...current, [leafKey]: fieldValue });
+      const next = { ...current, [leafKey]: fieldValue };
+      valueRef.current = next;
+      onValueChange(next);
     },
-    [value, onValueChange],
+    [onValueChange],
   );
 
   const commitRename = useCallback(() => {

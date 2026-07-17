@@ -55,10 +55,12 @@ The **LLM Router** page manages the Varde `vv-llm-proxy` via its admin API (`/ad
   OpenRouter-only.
 - **Safe rename/delete** — Renaming keeps the old name routable via legacy names; deleting a group requires
   choosing a replacement default (when it was the default) and offers to fold its names into another group.
-- **LibreChat sync** — On save, the `Varde` endpoint's `models.default` + `titleModel` and the Varde model
-  specs' `preset.model` are updated to match the groups. An **impact preview** shows the before→after before
-  you save. The proxy is saved **first** (it accepts both current + legacy names), so a failed LibreChat
-  sync never breaks routing; a **Retry LibreChat sync** action re-runs just the sync.
+- **LibreChat sync** — On save, the Varde `vv-llm-proxy` endpoint — identified by its
+  `${VV_LLM_PROXY_BASE_URL}` baseURL, **not** a display name, so renaming it (e.g. `Varde` → `Varde Secure`)
+  never skips the sync — has its `models.default` + `titleModel` updated, and every model spec pointing at
+  that endpoint has its `preset.model` rewritten to match the groups. An **impact preview** shows the
+  before→after before you save. The proxy is saved **first** (it accepts both current + legacy names), so a
+  failed LibreChat sync never breaks routing; a **Retry LibreChat sync** action re-runs just the sync.
 - **Optimistic concurrency** — The proxy config carries a revision token; a concurrent edit yields a clear
   "config changed elsewhere" prompt (409) instead of silently overwriting. If the proxy still runs the
   legacy tier API, the page shows the current routing **read-only** until the proxy is upgraded.

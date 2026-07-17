@@ -34,25 +34,55 @@ function groups(over?: t.ChatModelGroup[]): t.ChatModelGroup[] {
 }
 
 describe('findVardeEndpoint', () => {
-  it('finds the Varde endpoint by name', () => {
+  it('finds the Varde endpoint by its proxy baseURL', () => {
     const found = findVardeEndpoint(baseConfig());
     expect('error' in found).toBe(false);
     if (!('error' in found)) expect(found.index).toBe(1);
   });
 
-  it('reports missing when there is no Varde endpoint', () => {
-    const found = findVardeEndpoint(baseConfig({ custom: [{ name: 'OpenRouter' }] }));
+  it('finds the endpoint regardless of display name (renamed "Varde Secure")', () => {
+    const found = findVardeEndpoint(
+      baseConfig({
+        custom: [
+          { name: 'OpenRouter', baseURL: 'https://openrouter.ai/api/v1' },
+          { name: 'Varde Secure', baseURL: '${VV_LLM_PROXY_BASE_URL}/v1', models: { default: [] } },
+        ],
+      }),
+    );
+    expect('error' in found).toBe(false);
+    if (!('error' in found)) {
+      expect(found.index).toBe(1);
+      expect((found.endpoint as { name?: string }).name).toBe('Varde Secure');
+    }
+  });
+
+  it('reports missing when no endpoint points at the proxy', () => {
+    const found = findVardeEndpoint(
+      baseConfig({ custom: [{ name: 'OpenRouter', baseURL: 'https://openrouter.ai/api/v1' }] }),
+    );
     expect(found).toEqual({ error: 'missing' });
   });
 
-  it('reports ambiguous when there is more than one Varde endpoint', () => {
-    const found = findVardeEndpoint(baseConfig({ custom: [{ name: 'Varde' }, { name: 'Varde' }] }));
+  it('reports ambiguous when more than one endpoint points at the proxy', () => {
+    const found = findVardeEndpoint(
+      baseConfig({
+        custom: [
+          { name: 'Varde', baseURL: '${VV_LLM_PROXY_BASE_URL}/v1' },
+          { name: 'Varde Secure', baseURL: '${VV_LLM_PROXY_BASE_URL}/v1' },
+        ],
+      }),
+    );
     expect(found).toEqual({ error: 'ambiguous' });
   });
 
   it('handles an index-keyed object shape for endpoints.custom', () => {
     const config = {
-      endpoints: { custom: { '0': { name: 'OpenRouter' }, '1': { name: 'Varde' } } },
+      endpoints: {
+        custom: {
+          '0': { name: 'OpenRouter', baseURL: 'https://openrouter.ai/api/v1' },
+          '1': { name: 'Varde', baseURL: '${VV_LLM_PROXY_BASE_URL}/v1' },
+        },
+      },
     } as unknown as Cfg;
     const found = findVardeEndpoint(config);
     expect('error' in found).toBe(false);
@@ -134,9 +164,38 @@ describe('computeVardeSyncPlan', () => {
     expect(plan.diff.specs).toEqual([{ index: 0, name: 'forced', before: 'x', after: 'premium' }]);
   });
 
-  it('returns an error when the Varde endpoint is missing', () => {
+  it('syncs a renamed endpoint ("Varde Secure") and its specs by the found name', () => {
+    const config = baseConfig({
+      custom: [
+        {
+          name: 'Varde Secure',
+          baseURL: '${VV_LLM_PROXY_BASE_URL}/v1',
+          models: { default: ['standard'] },
+          titleModel: 'standard',
+        },
+      ],
+      specs: [
+        {
+          name: 'default-spec',
+          default: true,
+          preset: { endpoint: 'Varde Secure', model: 'standard' },
+        },
+      ],
+    });
+    const plan = computeVardeSyncPlan(config, groups(), 'premium');
+    if ('error' in plan) throw new Error('unexpected error');
+    expect(plan.diff.specs).toEqual([
+      { index: 0, name: 'default-spec', before: 'standard', after: 'premium' },
+    ]);
+    expect(plan.entries.map((e) => e.fieldPath)).toEqual([
+      'endpoints.custom.0',
+      'modelSpecs.list.0',
+    ]);
+  });
+
+  it('returns an error when no endpoint points at the proxy', () => {
     const plan = computeVardeSyncPlan(
-      baseConfig({ custom: [{ name: 'OpenRouter' }] }),
+      baseConfig({ custom: [{ name: 'OpenRouter', baseURL: 'https://openrouter.ai/api/v1' }] }),
       groups(),
       'standard',
     );

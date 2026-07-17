@@ -2,8 +2,8 @@
  * Keep the LibreChat base config in sync with the vv-llm-proxy chat-model groups.
  *
  * Because a group `name` is sent verbatim as the OpenAI `model`, renaming/adding/removing a group must
- * also update the LibreChat `Varde` custom endpoint (`models.default` + `titleModel`) and every model
- * spec whose `preset.endpoint === "Varde"` (esp. the default spec → the default group's name). This
+ * also update the LibreChat Varde custom endpoint (`models.default` + `titleModel`) and every model
+ * spec whose `preset.endpoint` is that endpoint (esp. the default spec → the default group's name). This
  * module computes that impact **purely** (reused by the UI preview) and writes it via the existing
  * `saveBaseConfigFn` field patch. Save ordering is proxy-first (the caller saves the proxy config, which
  * accepts both current + legacy names, before syncing here) so a failed sync never breaks routing.
@@ -14,9 +14,20 @@ import { createServerFn } from '@tanstack/react-start';
 import type * as t from '@/types';
 import { getBaseConfigFn, saveBaseConfigFn, toConfigArraySource } from './config';
 
-const VARDE_ENDPOINT_NAME = 'Varde';
+/**
+ * The Varde custom endpoint is identified by its `baseURL` pointing at the vv-llm-proxy — i.e. containing
+ * the `${VV_LLM_PROXY_BASE_URL}` env placeholder that the base config always stores — NOT by a hardcoded
+ * display name. Matching on the name broke as soon as the endpoint was renamed (e.g. `Varde` → `Varde
+ * Secure`): the sync silently skipped. Specs are then matched by the found endpoint's actual name.
+ */
+const PROXY_BASE_URL_PLACEHOLDER = '${VV_LLM_PROXY_BASE_URL}';
 
 type ConfigObject = Record<string, t.ConfigValue>;
+
+function endpointTargetsProxy(endpoint: ConfigObject): boolean {
+  const baseURL = typeof endpoint.baseURL === 'string' ? endpoint.baseURL : '';
+  return baseURL.includes(PROXY_BASE_URL_PLACEHOLDER);
+}
 
 function asObject(value: unknown): ConfigObject | undefined {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -37,9 +48,10 @@ function readModelsDefault(endpoint: ConfigObject): string[] {
 }
 
 /**
- * Locate the `Varde` custom endpoint in the base config by name. `endpoints.custom` may be a real array
- * or an index-keyed object, so it is normalized first. Zero matches → `missing`; more than one → `ambiguous`
- * (never guess — an admin must resolve it in the Configuration editor).
+ * Locate the Varde custom endpoint in the base config by its proxy `baseURL` (see
+ * `endpointTargetsProxy`), independent of the endpoint's display name. `endpoints.custom` may be a real
+ * array or an index-keyed object, so it is normalized first. Zero matches → `missing`; more than one →
+ * `ambiguous` (never guess — an admin must resolve it in the Configuration editor).
  */
 export function findVardeEndpoint(
   baseConfig: ConfigObject,
@@ -49,7 +61,7 @@ export function findVardeEndpoint(
   const matches: Array<{ index: number; endpoint: ConfigObject }> = [];
   for (let i = 0; i < custom.length; i += 1) {
     const endpoint = asObject(custom[i]);
-    if (endpoint && endpoint.name === VARDE_ENDPOINT_NAME) matches.push({ index: i, endpoint });
+    if (endpoint && endpointTargetsProxy(endpoint)) matches.push({ index: i, endpoint });
   }
   if (matches.length === 0) return { error: 'missing' };
   if (matches.length > 1) return { error: 'ambiguous' };
@@ -64,12 +76,19 @@ export function extractVardeFragments(baseConfig: ConfigObject): t.VardeFragment
     'error' in found || typeof found.endpoint.titleModel !== 'string'
       ? null
       : found.endpoint.titleModel;
+  const vardeName =
+    'error' in found || typeof found.endpoint.name !== 'string' ? null : found.endpoint.name;
   const specList = toConfigArraySource(asObject(baseConfig.modelSpecs)?.list) ?? [];
   const specModels: t.VardeFragments['specModels'] = [];
-  for (let i = 0; i < specList.length; i += 1) {
-    const preset = asObject(asObject(specList[i])?.preset);
-    if (preset && preset.endpoint === VARDE_ENDPOINT_NAME) {
-      specModels.push({ index: i, model: typeof preset.model === 'string' ? preset.model : null });
+  if (vardeName != null) {
+    for (let i = 0; i < specList.length; i += 1) {
+      const preset = asObject(asObject(specList[i])?.preset);
+      if (preset && preset.endpoint === vardeName) {
+        specModels.push({
+          index: i,
+          model: typeof preset.model === 'string' ? preset.model : null,
+        });
+      }
     }
   }
   return { modelsDefault, titleModel, specModels };
@@ -94,6 +113,7 @@ export function computeVardeSyncPlan(
   const found = findVardeEndpoint(baseConfig);
   if ('error' in found) return found;
   const { index: endpointIndex, endpoint } = found;
+  const vardeName = typeof endpoint.name === 'string' ? endpoint.name : null;
 
   const byName = new Map<string, t.ChatModelGroup>();
   for (const group of groups) byName.set(group.name, group);
@@ -124,7 +144,7 @@ export function computeVardeSyncPlan(
   for (let i = 0; i < specList.length; i += 1) {
     const spec = asObject(specList[i]);
     const preset = spec && asObject(spec.preset);
-    if (!spec || !preset || preset.endpoint !== VARDE_ENDPOINT_NAME) continue;
+    if (!spec || !preset || vardeName == null || preset.endpoint !== vardeName) continue;
     const specName = typeof spec.name === 'string' ? spec.name : `spec ${i}`;
     const currentModel = typeof preset.model === 'string' ? preset.model : null;
     let resolved: string | undefined;

@@ -40,7 +40,7 @@ export function SyncImpactPreview({ chatRouting }: SyncImpactPreviewProps) {
       <div role="note" className={box}>
         <p className="text-(--cui-color-text-warning)">
           {plan.error === 'missing'
-            ? "No “Varde” endpoint found in the LibreChat config — routing will save to the proxy, but LibreChat won't be synced automatically."
+            ? "No Varde (vv-llm-proxy) endpoint found in the LibreChat config — routing will save to the proxy, but LibreChat won't be synced automatically."
             : 'Multiple “Varde” endpoints found — resolve the duplicate in the Configuration editor before the sync can run.'}
         </p>
       </div>

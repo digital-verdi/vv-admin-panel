@@ -33,13 +33,39 @@ export interface VardeVernRolloutEngine {
   enforceAllowed: boolean;
 }
 
+/** One entity's editable policy entry (the PUT shape mirrors the proxy's `entityPolicySchema`). */
+export interface VardeVernEntityPolicy {
+  action: VardeVernAction;
+  requiredEngines: string[];
+  minConfidence?: number;
+}
+
+/** The editable policy object round-tripped through GET/PUT (mirrors the proxy `vardeVernPolicySchema`). */
+export interface VardeVernPolicyInput {
+  version: number;
+  defaultAction: VardeVernAction;
+  entities: Record<string, VardeVernEntityPolicy>;
+}
+
+export interface VardeVernRolloutInput {
+  version: number;
+  engines: VardeVernRolloutEngine[];
+}
+
 export interface VardeVern {
   policyVersion: number;
   defaultAction: VardeVernAction;
   /** False when the STORED policy failed validation — the safe synthesized default is reflected. */
   policyValid: boolean;
+  rolloutValid: boolean;
   entities: VardeVernEntity[];
+  /** The editable policy source (GUI renders `entities`, edits `policy`). */
+  policy: VardeVernPolicyInput;
   rollout: VardeVernRolloutEngine[];
   configRevision: number;
   dbBacked: boolean;
 }
+
+export type SaveVardeVernResult =
+  | { status: 'ok'; configRevision: number }
+  | { status: 'version-mismatch' };

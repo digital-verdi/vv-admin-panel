@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as AppVardeVernRouteImport } from './routes/_app/varde-vern'
 import { Route as AppUsersRouteImport } from './routes/_app/users'
 import { Route as AppLlmRouterRouteImport } from './routes/_app/llm-router'
 import { Route as AppInvitesRouteImport } from './routes/_app/invites'
@@ -33,6 +34,11 @@ const AppRoute = AppRouteImport.update({
 const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppVardeVernRoute = AppVardeVernRouteImport.update({
+  id: '/varde-vern',
+  path: '/varde-vern',
   getParentRoute: () => AppRoute,
 } as any)
 const AppUsersRoute = AppUsersRouteImport.update({
@@ -85,6 +91,7 @@ export interface FileRoutesByFullPath {
   '/invites': typeof AppInvitesRoute
   '/llm-router': typeof AppLlmRouterRoute
   '/users': typeof AppUsersRoute
+  '/varde-vern': typeof AppVardeVernRoute
   '/auth/openid/callback': typeof AuthOpenidCallbackRoute
   '/configuration/': typeof AppConfigurationIndexRoute
 }
@@ -96,6 +103,7 @@ export interface FileRoutesByTo {
   '/invites': typeof AppInvitesRoute
   '/llm-router': typeof AppLlmRouterRoute
   '/users': typeof AppUsersRoute
+  '/varde-vern': typeof AppVardeVernRoute
   '/': typeof AppIndexRoute
   '/auth/openid/callback': typeof AuthOpenidCallbackRoute
   '/configuration': typeof AppConfigurationIndexRoute
@@ -110,6 +118,7 @@ export interface FileRoutesById {
   '/_app/invites': typeof AppInvitesRoute
   '/_app/llm-router': typeof AppLlmRouterRoute
   '/_app/users': typeof AppUsersRoute
+  '/_app/varde-vern': typeof AppVardeVernRoute
   '/_app/': typeof AppIndexRoute
   '/auth/openid/callback': typeof AuthOpenidCallbackRoute
   '/_app/configuration/': typeof AppConfigurationIndexRoute
@@ -125,6 +134,7 @@ export interface FileRouteTypes {
     | '/invites'
     | '/llm-router'
     | '/users'
+    | '/varde-vern'
     | '/auth/openid/callback'
     | '/configuration/'
   fileRoutesByTo: FileRoutesByTo
@@ -136,6 +146,7 @@ export interface FileRouteTypes {
     | '/invites'
     | '/llm-router'
     | '/users'
+    | '/varde-vern'
     | '/'
     | '/auth/openid/callback'
     | '/configuration'
@@ -149,6 +160,7 @@ export interface FileRouteTypes {
     | '/_app/invites'
     | '/_app/llm-router'
     | '/_app/users'
+    | '/_app/varde-vern'
     | '/_app/'
     | '/auth/openid/callback'
     | '/_app/configuration/'
@@ -181,6 +193,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof AppIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/varde-vern': {
+      id: '/_app/varde-vern'
+      path: '/varde-vern'
+      fullPath: '/varde-vern'
+      preLoaderRoute: typeof AppVardeVernRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/users': {
@@ -249,6 +268,7 @@ interface AppRouteChildren {
   AppInvitesRoute: typeof AppInvitesRoute
   AppLlmRouterRoute: typeof AppLlmRouterRoute
   AppUsersRoute: typeof AppUsersRoute
+  AppVardeVernRoute: typeof AppVardeVernRoute
   AppIndexRoute: typeof AppIndexRoute
   AppConfigurationIndexRoute: typeof AppConfigurationIndexRoute
 }
@@ -260,6 +280,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppInvitesRoute: AppInvitesRoute,
   AppLlmRouterRoute: AppLlmRouterRoute,
   AppUsersRoute: AppUsersRoute,
+  AppVardeVernRoute: AppVardeVernRoute,
   AppIndexRoute: AppIndexRoute,
   AppConfigurationIndexRoute: AppConfigurationIndexRoute,
 }

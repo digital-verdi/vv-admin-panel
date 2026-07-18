@@ -240,6 +240,22 @@ export const llmProxyModelsQueryOptions = queryOptions({
   staleTime: 300_000,
 });
 
+export const getVardeVernFn = createServerFn({ method: 'GET' }).handler(
+  async (): Promise<t.VardeVern> => {
+    const response = await proxyFetch('/admin/varde-vern');
+    if (!response.ok) {
+      await extractProxyError(response, 'Failed to load Varde Vern config');
+    }
+    return (await response.json()) as t.VardeVern;
+  },
+);
+
+export const vardeVernQueryOptions = queryOptions({
+  queryKey: ['varde-vern'],
+  queryFn: () => getVardeVernFn(),
+  staleTime: 15_000,
+});
+
 export const saveLlmProxyConfigFn = createServerFn({ method: 'POST' })
   .inputValidator(saveInputSchema)
   .handler(async ({ data }): Promise<t.SaveLlmProxyResult> => {

@@ -42,6 +42,12 @@ const navItems: t.NavItem[] = [
     icon: 'git-merge',
     capability: SystemCapabilities.READ_CONFIGS,
   },
+  {
+    labelKey: 'com_nav_varde_vern',
+    path: '/varde-vern',
+    icon: 'secure',
+    capability: SystemCapabilities.READ_CONFIGS,
+  },
   { labelKey: 'com_nav_grants', path: '/grants', icon: 'lock' },
   { labelKey: 'com_nav_help', path: '/help', icon: 'question' },
 ];

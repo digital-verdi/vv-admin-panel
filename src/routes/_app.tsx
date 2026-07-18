@@ -16,6 +16,7 @@ const ROUTE_TITLE_KEYS: Record<string, string> = {
   '/users': 'com_users_title',
   '/access': 'com_access_title',
   '/llm-router': 'com_llm_router_title',
+  '/varde-vern': 'com_varde_vern_title',
   '/grants': 'com_grants_title',
   '/help': 'com_help_title',
 };

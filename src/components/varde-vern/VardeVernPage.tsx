@@ -4,12 +4,13 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import type { Tone } from './operations';
 import type * as t from '@/types';
-import { groupEntitiesByEngine, phaseTone, actionTone } from './operations';
 import { SelectField, NumberField } from '@/components/configuration/fields';
-import { EmptyState, LoadingState } from '@/components/shared';
+import { groupEntitiesByEngine, phaseTone, actionTone } from './operations';
 import { vardeVernQueryOptions, saveVardeVernFn } from '@/server';
+import { EmptyState, LoadingState } from '@/components/shared';
 import { notifySuccess, notifyError, cn } from '@/utils';
 import { SystemCapabilities } from '@/constants';
+import { PresidioPanel } from './PresidioPanel';
 import { useCapabilities } from '@/hooks';
 
 const TONE_CLASS: Record<Tone, string> = {
@@ -192,11 +193,18 @@ export function VardeVernPage() {
       >
         {semantic.length === 0 ? (
           <p className="py-2 text-xs text-(--cui-color-text-muted)">
-            No semantic engine is active yet — Presidio joins Varde Vern in a later phase.
+            No semantic entities are active yet — enable them from the Presidio Analyzer panel below.
           </p>
         ) : (
           semantic.map(entityRow)
         )}
+      </Section>
+
+      <Section
+        title="Presidio Analyzer"
+        description="The supplementary semantic engine — read-only status + a native test studio (synthetic data only; nothing is stored)."
+      >
+        <PresidioPanel status={data.presidio} />
       </Section>
 
       <Section

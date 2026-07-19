@@ -284,6 +284,38 @@ const saveVardeVernSchema = z.object({
   }),
 });
 
+// The native Presidio test studio: analyze a SYNTHETIC sample. The proxy response carries only
+// offsets/labels/scores (never the matched substring); nothing is persisted. Server-only (admin Bearer).
+const presidioTestSchema = z.object({
+  text: z.string().min(1).max(10_000),
+  language: z.string().min(1).optional(),
+  entities: z.array(z.string().min(1)).optional(),
+  scoreThreshold: z.number().min(0).max(1).optional(),
+});
+
+export const testPresidioFn = createServerFn({ method: 'POST' })
+  .inputValidator(presidioTestSchema)
+  .handler(async ({ data }): Promise<t.PresidioTestResult> => {
+    const response = await proxyFetch('/admin/varde-vern/presidio/test', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      await extractProxyError(response, 'Presidio test failed');
+    }
+    return (await response.json()) as t.PresidioTestResult;
+  });
+
+export const refreshPresidioFn = createServerFn({ method: 'POST' }).handler(
+  async (): Promise<t.PresidioStatus> => {
+    const response = await proxyFetch('/admin/varde-vern/presidio/refresh', { method: 'POST' });
+    if (!response.ok) {
+      await extractProxyError(response, 'Presidio refresh failed');
+    }
+    return (await response.json()) as t.PresidioStatus;
+  },
+);
+
 export const saveVardeVernFn = createServerFn({ method: 'POST' })
   .inputValidator(saveVardeVernSchema)
   .handler(async ({ data }): Promise<t.SaveVardeVernResult> => {

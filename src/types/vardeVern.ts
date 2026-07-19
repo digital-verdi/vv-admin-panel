@@ -52,6 +52,35 @@ export interface VardeVernRolloutInput {
   engines: VardeVernRolloutEngine[];
 }
 
+/** Read-only Presidio deployment + health status (from the proxy GET). NEVER carries endpoint/host/token. */
+export interface PresidioStatus {
+  configured: boolean;
+  credential?: 'managed';
+  imageMode?: string;
+  release?: string;
+  digest?: string;
+  language?: string;
+  state?: 'ready' | 'degraded' | 'unavailable' | 'unknown';
+  lastProbeAt?: number | null;
+  lastProbeLatencyMs?: number | null;
+  supportedEntities?: string[];
+}
+
+/** One Presidio test-studio finding. Carries only offsets/labels/scores — NEVER the matched substring
+ *  (the browser marks its own input locally from the UTF-16 offsets). */
+export interface PresidioFinding {
+  entityType: string;
+  startUtf16: number;
+  endUtf16: number;
+  score: number;
+  abovePolicyThreshold: boolean;
+}
+
+export interface PresidioTestResult {
+  status: string;
+  findings: PresidioFinding[];
+}
+
 export interface VardeVern {
   policyVersion: number;
   defaultAction: VardeVernAction;
@@ -62,6 +91,8 @@ export interface VardeVern {
   /** The editable policy source (GUI renders `entities`, edits `policy`). */
   policy: VardeVernPolicyInput;
   rollout: VardeVernRolloutEngine[];
+  /** Read-only Presidio status (present once the proxy has the transport configured). */
+  presidio?: PresidioStatus;
   configRevision: number;
   dbBacked: boolean;
 }

@@ -240,6 +240,73 @@ export const llmProxyModelsQueryOptions = queryOptions({
   staleTime: 300_000,
 });
 
+export const getVardeVernFn = createServerFn({ method: 'GET' }).handler(
+  async (): Promise<t.VardeVern> => {
+    const response = await proxyFetch('/admin/varde-vern');
+    if (!response.ok) {
+      await extractProxyError(response, 'Failed to load Varde Vern config');
+    }
+    return (await response.json()) as t.VardeVern;
+  },
+);
+
+export const vardeVernQueryOptions = queryOptions({
+  queryKey: ['varde-vern'],
+  queryFn: () => getVardeVernFn(),
+  staleTime: 15_000,
+});
+
+const vernActionSchema = z.enum(['block', 'enforce', 'shadow', 'allow']);
+const saveVardeVernSchema = z.object({
+  expectedRevision: z.number().int().min(0),
+  policy: z.object({
+    version: z.number().int().positive(),
+    defaultAction: vernActionSchema,
+    entities: z.record(
+      z.string().min(1),
+      z.object({
+        action: vernActionSchema,
+        requiredEngines: z.array(z.string().min(1)),
+        minConfidence: z.number().min(0).max(1).optional(),
+      }),
+    ),
+  }),
+  rollout: z.object({
+    version: z.literal(1),
+    engines: z.array(
+      z.object({
+        engineId: z.string().min(1),
+        status: z.enum(['disabled', 'optional', 'required']),
+        rolloutPhase: z.enum(['off', 'shadow', 'enforce']),
+        enforceAllowed: z.boolean(),
+      }),
+    ),
+  }),
+});
+
+export const saveVardeVernFn = createServerFn({ method: 'POST' })
+  .inputValidator(saveVardeVernSchema)
+  .handler(async ({ data }): Promise<t.SaveVardeVernResult> => {
+    const response = await proxyFetch('/admin/varde-vern', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+    if (response.status === 409) {
+      const body = await response.json().catch(() => ({}));
+      if ((body as { error?: { code?: string } }).error?.code === 'CONFIG_VERSION_MISMATCH') {
+        return { status: 'version-mismatch' };
+      }
+    }
+    if (!response.ok) {
+      await extractProxyError(response, 'Failed to save Varde Vern config');
+    }
+    const body = (await response.json().catch(() => ({}))) as { configRevision?: number };
+    return {
+      status: 'ok',
+      configRevision: typeof body.configRevision === 'number' ? body.configRevision : -1,
+    };
+  });
+
 export const saveLlmProxyConfigFn = createServerFn({ method: 'POST' })
   .inputValidator(saveInputSchema)
   .handler(async ({ data }): Promise<t.SaveLlmProxyResult> => {

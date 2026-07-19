@@ -14,3 +14,4 @@ export type * from './server';
 export type * from './shared';
 export type * from './theme';
 export type * from './user';
+export type * from './vardeVern';

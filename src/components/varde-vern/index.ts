@@ -1,0 +1,1 @@
+export { VardeVernPage } from './VardeVernPage';

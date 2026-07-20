@@ -38,6 +38,9 @@ export interface VardeVernEntityPolicy {
   action: VardeVernAction;
   requiredEngines: string[];
   minConfidence?: number;
+  /** Languages this SEMANTIC entity is gated GREEN to enforce/block (F149f). Required by the proxy
+   *  before a supplementary entity may be enforced; must be a subset of the analyzer's languages. */
+  enforceLanguages?: string[];
 }
 
 /** The editable policy object round-tripped through GET/PUT (mirrors the proxy `vardeVernPolicySchema`). */
@@ -60,6 +63,8 @@ export interface PresidioStatus {
   release?: string;
   digest?: string;
   language?: string;
+  /** All languages the hot path analyzes in (e.g. ['nb','en']) — F149g. */
+  languages?: string[];
   state?: 'ready' | 'degraded' | 'unavailable' | 'unknown';
   lastProbeAt?: number | null;
   lastProbeLatencyMs?: number | null;

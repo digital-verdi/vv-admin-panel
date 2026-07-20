@@ -1,5 +1,14 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { SystemCapabilities } from '@librechat/data-schemas/capabilities';
 import type * as t from '@/types';
+
+// Server-side authorization guard (F12a). The handlers call proxyFetch with a shared admin Bearer that
+// carries no caller identity, so requireCapability is the ONLY server-side gate. Mock it (hoisted) so
+// tests can grant/deny capabilities; default-resolve so the behavioural tests below still pass.
+const { requireCapabilityMock } = vi.hoisted(() => ({
+  requireCapabilityMock: vi.fn(async (_cap: string): Promise<void> => {}),
+}));
+vi.mock('./capabilities', () => ({ requireCapability: requireCapabilityMock }));
 
 /**
  * Server-fn tests for the Varde Vern config fns (getVardeVernFn / saveVardeVernFn). We mock
@@ -51,6 +60,35 @@ const validInput: {
     },
   },
 };
+
+beforeEach(() => {
+  requireCapabilityMock.mockReset();
+  requireCapabilityMock.mockResolvedValue(undefined);
+});
+
+describe('authorization (F12a — server-side capability gate)', () => {
+  it('getVardeVernFn requires READ_CONFIGS before calling the privileged proxy', async () => {
+    respond(200, {});
+    await getVardeVernFn();
+    expect(requireCapabilityMock).toHaveBeenCalledWith(SystemCapabilities.READ_CONFIGS);
+  });
+
+  it('getVardeVernFn rejects (never reaching the proxy) when the capability check throws', async () => {
+    requireCapabilityMock.mockRejectedValueOnce(new Error('Insufficient permissions: requires read:configs'));
+    await expect(getVardeVernFn()).rejects.toThrow('Insufficient permissions');
+  });
+
+  it('saveVardeVernFn requires MANAGE_CONFIGS (overwrites the live PII policy)', async () => {
+    respond(200, { configRevision: 1 });
+    await saveVardeVernFn(validInput);
+    expect(requireCapabilityMock).toHaveBeenCalledWith(SystemCapabilities.MANAGE_CONFIGS);
+  });
+
+  it('saveVardeVernFn rejects when under-privileged (no policy overwrite)', async () => {
+    requireCapabilityMock.mockRejectedValueOnce(new Error('Insufficient permissions: requires manage:configs'));
+    await expect(saveVardeVernFn(validInput)).rejects.toThrow('Insufficient permissions');
+  });
+});
 
 describe('getVardeVernFn', () => {
   beforeEach(() => respond(200, {}));

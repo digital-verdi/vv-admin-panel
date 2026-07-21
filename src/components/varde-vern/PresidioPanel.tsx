@@ -5,8 +5,9 @@ import type { ReactNode } from 'react';
 import type { MarkSpan } from './SpanMarker';
 import type { Tone } from './operations';
 import type * as t from '@/types';
-import { SelectField, TextareaField, NumberField } from '@/components/configuration/fields';
+import { SelectField, TextareaField } from '@/components/configuration/fields';
 import { testPresidioFn, refreshPresidioFn } from '@/server';
+import { PresidioScoreField } from './PresidioScoreField';
 import { SpanMarker } from './SpanMarker';
 import { cn, notifyError } from '@/utils';
 
@@ -186,6 +187,17 @@ export function PresidioPanel({ status, canManage = false, entityActions = {} }:
           rows={3}
           placeholder="Synthetic text to analyze"
         />
+        {/* F12f: the score_threshold the server-fn supports — same Minimum Presidio-score cutoff (+ the
+            fixed-0.85 note, since the studio analyzes today's spaCy-based PERSON/LOCATION/ORG). */}
+        <div className="mt-2">
+          <PresidioScoreField
+            id="presidio-test-threshold"
+            aria-label="Test-studio minimum Presidio-score"
+            value={threshold}
+            onChange={(v) => setThreshold(v ?? 0.5)}
+            showFixedNote
+          />
+        </div>
         <div className="mt-2 flex flex-wrap items-end gap-3">
           <div className="w-40">
             <SelectField
@@ -194,19 +206,6 @@ export function PresidioPanel({ status, canManage = false, entityActions = {} }:
               value={language}
               options={LANGUAGE_OPTIONS}
               onChange={setLanguage}
-            />
-          </div>
-          {/* F12f: confidence threshold (score_threshold) the server-fn supports. */}
-          <div className="w-40">
-            <span className="mb-1 block text-xs text-(--cui-color-text-muted)">Min confidence</span>
-            <NumberField
-              id="presidio-test-threshold"
-              aria-label="Confidence threshold"
-              value={threshold}
-              onChange={(v) => setThreshold(v ?? 0.5)}
-              min={0}
-              max={1}
-              step={0.05}
             />
           </div>
           <button

@@ -11,8 +11,8 @@ import { queryOptions } from '@tanstack/react-query';
 import { createServerFn } from '@tanstack/react-start';
 import { SystemCapabilities } from '@librechat/data-schemas/capabilities';
 import type * as t from '@/types';
-import { requireCapability } from './capabilities';
 import { proxyFetch, extractProxyError } from './utils/proxyApi';
+import { requireCapability } from './capabilities';
 
 /** A group name/legacyName/id slug — lowercase alphanumerics with single `-`/`_` separators. Sent verbatim
  *  as `model` to the proxy + into LibreChat config, so it stays deterministic (no case/whitespace ambiguity). */
@@ -276,6 +276,9 @@ const saveVardeVernSchema = z.object({
         action: vernActionSchema,
         requiredEngines: z.array(z.string().min(1)),
         minConfidence: z.number().min(0).max(1).optional(),
+        // BLOCKER-5: per-language enforce approvals (the språk-gate). Without this the Zod record STRIPS
+        // `enforceLanguages`, so a semantic enforce can never be saved (the proxy 400s without it).
+        enforceLanguages: z.array(z.string().min(1)).optional(),
       }),
     ),
   }),

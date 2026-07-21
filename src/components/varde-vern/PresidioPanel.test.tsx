@@ -143,4 +143,11 @@ describe('PresidioPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: /analyze/i }));
     await waitFor(() => expect(screen.getByText('observe')).toBeInTheDocument());
   });
+
+  it('the test studio shows the Minimum Presidio-score field with the help text + fixed-0.85 note', () => {
+    renderPanel(CONFIGURED, { canManage: true });
+    expect(screen.getByText('Minimum Presidio-score')).toBeInTheDocument();
+    expect(screen.getByText(/ikke nødvendigvis en prosentvis sannsynlighet/)).toBeInTheDocument();
+    expect(screen.getByText(/fast score 0,85/)).toBeInTheDocument();
+  });
 });

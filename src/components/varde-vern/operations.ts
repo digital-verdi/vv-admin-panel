@@ -1,5 +1,30 @@
 import type * as t from '@/types';
 
+/** The minimum-score label + the ONE consolidated intro (shared by the integrated-entities table and the
+ *  test studio). It is a COARSE cutoff on a raw Presidio score — never a calibrated probability. */
+export const PRESIDIO_SCORE_LABEL = 'Minimum score';
+export const PRESIDIO_SCORE_INTRO =
+  "Findings below an entity's minimum score are ignored. The score is a technical value from Presidio — not a calibrated probability; the current spaCy recognizer returns a fixed 0.85 for semantic entities, so values above 0.85 filter findings out.";
+
+const ENTITY_DISPLAY_NAMES: Record<string, string> = {
+  PERSON: 'Person',
+  LOCATION: 'Location',
+  ORG: 'Organization',
+  ORGANIZATION: 'Organization',
+};
+
+/** Title-case display name for a semantic entity code — the ALL-CAPS codes stay internal, never body text. */
+export function entityDisplayName(entityType: string): string {
+  return (
+    ENTITY_DISPLAY_NAMES[entityType] ??
+    entityType
+      .toLowerCase()
+      .split('_')
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ')
+  );
+}
+
 export interface EngineSplit {
   regex: t.VardeVernEntity[];
   semantic: t.VardeVernEntity[];
@@ -17,6 +42,31 @@ export function groupEntitiesByEngine(entities: readonly t.VardeVernEntity[]): E
     else split.regex.push(entity);
   }
   return split;
+}
+
+/**
+ * The green languages an entity may enforce/block in — the per-entity language gate the panel renders.
+ * Prefers the per-entity `enforceGreenLanguages` (SEMANTIC only); falls back to deriving from the
+ * top-level `enforceableGreen` list. NEVER hardcoded — an empty result means enforce is not yet allowed.
+ */
+export function greenLanguagesFor(
+  entity: t.VardeVernEntity,
+  enforceableGreen?: readonly t.EnforceableGreen[],
+): string[] {
+  if (entity.enforceGreenLanguages) return [...entity.enforceGreenLanguages];
+  return (enforceableGreen ?? [])
+    .filter((g) => g.entity === entity.entityType)
+    .map((g) => g.language);
+}
+
+/**
+ * The Presidio types the running analyzer REPORTS but Varde Vern has NOT integrated — derived dynamically
+ * as `supportedEntities` − `integratedPresidioEntities` (never a hardcoded list). These are reported-only:
+ * no Varde mapping/policy/gates, so they can never be set to shadow/enforce.
+ */
+export function reportedNotIntegrated(presidio?: t.PresidioStatus): string[] {
+  const integrated = new Set(presidio?.integratedPresidioEntities ?? []);
+  return (presidio?.supportedEntities ?? []).filter((entity) => !integrated.has(entity));
 }
 
 /** Presentation tone — green (protective), blue (measuring), grey (inactive). */

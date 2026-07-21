@@ -9,8 +9,10 @@
 import { z } from 'zod';
 import { queryOptions } from '@tanstack/react-query';
 import { createServerFn } from '@tanstack/react-start';
+import { SystemCapabilities } from '@librechat/data-schemas/capabilities';
 import type * as t from '@/types';
 import { proxyFetch, extractProxyError } from './utils/proxyApi';
+import { requireCapability } from './capabilities';
 
 /** A group name/legacyName/id slug — lowercase alphanumerics with single `-`/`_` separators. Sent verbatim
  *  as `model` to the proxy + into LibreChat config, so it stays deterministic (no case/whitespace ambiguity). */
@@ -209,6 +211,10 @@ export function normalizeProxyConfig(raw: unknown): t.LlmProxyConfig {
 
 export const getLlmProxyConfigFn = createServerFn({ method: 'GET' }).handler(
   async (): Promise<t.LlmProxyConfig> => {
+    // Server-side authz: proxyFetch carries the shared admin Bearer (no caller identity), so the ONLY
+    // server-side gate on this privileged proxy action is here. The client capability check disables UI
+    // only. READ_CONFIGS is implied by MANAGE_CONFIGS, so managers still pass.
+    await requireCapability(SystemCapabilities.READ_CONFIGS);
     const response = await proxyFetch('/admin/config');
     if (!response.ok) {
       await extractProxyError(response, 'Failed to load LLM Router config');
@@ -225,6 +231,7 @@ export const llmProxyConfigQueryOptions = queryOptions({
 
 export const getLlmProxyModelsFn = createServerFn({ method: 'GET' }).handler(
   async (): Promise<{ models: t.LlmProxyModel[] }> => {
+    await requireCapability(SystemCapabilities.READ_CONFIGS);
     const response = await proxyFetch('/admin/models');
     if (!response.ok) {
       await extractProxyError(response, 'Failed to load the model catalog');
@@ -242,6 +249,7 @@ export const llmProxyModelsQueryOptions = queryOptions({
 
 export const getVardeVernFn = createServerFn({ method: 'GET' }).handler(
   async (): Promise<t.VardeVern> => {
+    await requireCapability(SystemCapabilities.READ_CONFIGS);
     const response = await proxyFetch('/admin/varde-vern');
     if (!response.ok) {
       await extractProxyError(response, 'Failed to load Varde Vern config');
@@ -268,6 +276,9 @@ const saveVardeVernSchema = z.object({
         action: vernActionSchema,
         requiredEngines: z.array(z.string().min(1)),
         minConfidence: z.number().min(0).max(1).optional(),
+        // BLOCKER-5: per-language enforce approvals (the språk-gate). Without this the Zod record STRIPS
+        // `enforceLanguages`, so a semantic enforce can never be saved (the proxy 400s without it).
+        enforceLanguages: z.array(z.string().min(1)).optional(),
       }),
     ),
   }),
@@ -284,9 +295,46 @@ const saveVardeVernSchema = z.object({
   }),
 });
 
+// The native Presidio test studio: analyze a SYNTHETIC sample. The proxy response carries only
+// offsets/labels/scores (never the matched substring); nothing is persisted. Server-only (admin Bearer).
+const presidioTestSchema = z.object({
+  text: z.string().min(1).max(10_000),
+  language: z.string().min(1).optional(),
+  entities: z.array(z.string().min(1)).optional(),
+  scoreThreshold: z.number().min(0).max(1).optional(),
+});
+
+export const testPresidioFn = createServerFn({ method: 'POST' })
+  .inputValidator(presidioTestSchema)
+  .handler(async ({ data }): Promise<t.PresidioTestResult> => {
+    // Analyzing text against the live analyzer is a privileged, config-adjacent action → MANAGE_CONFIGS.
+    await requireCapability(SystemCapabilities.MANAGE_CONFIGS);
+    const response = await proxyFetch('/admin/varde-vern/presidio/test', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      await extractProxyError(response, 'Presidio test failed');
+    }
+    return (await response.json()) as t.PresidioTestResult;
+  });
+
+export const refreshPresidioFn = createServerFn({ method: 'POST' }).handler(
+  async (): Promise<t.PresidioStatus> => {
+    await requireCapability(SystemCapabilities.MANAGE_CONFIGS);
+    const response = await proxyFetch('/admin/varde-vern/presidio/refresh', { method: 'POST' });
+    if (!response.ok) {
+      await extractProxyError(response, 'Presidio refresh failed');
+    }
+    return (await response.json()) as t.PresidioStatus;
+  },
+);
+
 export const saveVardeVernFn = createServerFn({ method: 'POST' })
   .inputValidator(saveVardeVernSchema)
   .handler(async ({ data }): Promise<t.SaveVardeVernResult> => {
+    // Overwrites the ACTIVE Varde Vern PII policy (incl. regex-enforced entities live in prod) → MANAGE_CONFIGS.
+    await requireCapability(SystemCapabilities.MANAGE_CONFIGS);
     const response = await proxyFetch('/admin/varde-vern', {
       method: 'PUT',
       body: JSON.stringify(data),
@@ -310,6 +358,8 @@ export const saveVardeVernFn = createServerFn({ method: 'POST' })
 export const saveLlmProxyConfigFn = createServerFn({ method: 'POST' })
   .inputValidator(saveInputSchema)
   .handler(async ({ data }): Promise<t.SaveLlmProxyResult> => {
+    // Overwrites the live chat-routing config → MANAGE_CONFIGS (closes the same pre-existing gap).
+    await requireCapability(SystemCapabilities.MANAGE_CONFIGS);
     // Convert the UI composite `provider:model` keys to provider-explicit ModelRefs + stamp routing v3
     // (the proxy's PUT requires version 3). Everything else passes through unchanged.
     const chatRouting: WireRouting = {

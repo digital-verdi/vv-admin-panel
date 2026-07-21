@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, within, fireEvent, waitFor } from '@testing-library/react';
 import type * as t from '@/types';
 import { PresidioPanel } from './PresidioPanel';
 
@@ -120,9 +120,9 @@ describe('PresidioPanel', () => {
     expect(screen.getByText(/requires the manage-configs capability/i)).toBeInTheDocument();
   });
 
-  it('F12f: the entity filter + threshold are sent to the admin API', async () => {
+  it('F12f: the entity filter + threshold are sent to the admin API (display name shown, code sent)', async () => {
     renderPanel(CONFIGURED, { canManage: true });
-    fireEvent.click(screen.getByLabelText('PERSON')); // entity-filter checkbox
+    fireEvent.click(screen.getByLabelText('Person')); // entity-filter checkbox (title-case display name)
     fireEvent.click(screen.getByRole('button', { name: /analyze/i }));
     await waitFor(() => expect(testFn).toHaveBeenCalledTimes(1));
     const arg = testFn.mock.calls[0]![0] as { data: { entities?: string[]; scoreThreshold?: number } };
@@ -144,10 +144,21 @@ describe('PresidioPanel', () => {
     await waitFor(() => expect(screen.getByText('observe')).toBeInTheDocument());
   });
 
-  it('the test studio shows the Minimum Presidio-score field with the help text + fixed-0.85 note', () => {
+  it('the test studio shows the minimum-score field with the ONE consolidated English intro', () => {
     renderPanel(CONFIGURED, { canManage: true });
-    expect(screen.getByText('Minimum Presidio-score')).toBeInTheDocument();
-    expect(screen.getByText(/ikke nødvendigvis en prosentvis sannsynlighet/)).toBeInTheDocument();
-    expect(screen.getByText(/fast score 0,85/)).toBeInTheDocument();
+    expect(screen.getByText('Minimum score')).toBeInTheDocument();
+    expect(screen.getAllByText(/Findings below an entity's minimum score are ignored/)).toHaveLength(1);
+    expect(screen.queryByText('Minimum Presidio-score')).toBeNull();
+    expect(screen.queryByText(/ikke nødvendigvis en prosentvis sannsynlighet/)).toBeNull();
+    expect(screen.queryByText(/fast score 0,85/)).toBeNull();
+  });
+
+  it('renders entity display names, never the ALL-CAPS codes, in the findings table', async () => {
+    renderPanel(CONFIGURED, { canManage: true });
+    fireEvent.click(screen.getByRole('button', { name: /analyze/i }));
+    await waitFor(() => expect(screen.getByText('found')).toBeInTheDocument());
+    const table = screen.getByRole('table');
+    expect(within(table).getByText('Person')).toBeInTheDocument();
+    expect(within(table).queryByText('PERSON')).toBeNull();
   });
 });

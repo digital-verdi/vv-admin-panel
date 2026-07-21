@@ -1,4 +1,4 @@
-import { PRESIDIO_SCORE_LABEL, PRESIDIO_SCORE_HELP, PRESIDIO_SCORE_FIXED_NOTE } from './operations';
+import { PRESIDIO_SCORE_LABEL, PRESIDIO_SCORE_INTRO } from './operations';
 import { NumberField } from '@/components/configuration/fields';
 
 export interface PresidioScoreFieldProps {
@@ -6,23 +6,19 @@ export interface PresidioScoreFieldProps {
   value: number | undefined;
   onChange: (value: number | undefined) => void;
   disabled?: boolean;
-  /** Show the fixed-0.85 note — true for today's spaCy-based semantic entities + the test studio. */
-  showFixedNote?: boolean;
   'aria-label'?: string;
 }
 
 /**
- * The "Minimum Presidio-score" control shared by the per-entity semantic settings and the native test
- * studio. The value is a COARSE cutoff on a raw Presidio score — the help text is explicit that it is a
- * technical value, not a calibrated probability, and (for the fixed spaCy recognizer) that today's fixed
- * 0.85 makes the threshold binary rather than a fine-tuning slider.
+ * The "Minimum score" control for the native test studio. The value is a COARSE cutoff on a raw
+ * Presidio score — the single consolidated intro line makes explicit that it is a technical value,
+ * not a calibrated probability, and that today's fixed spaCy 0.85 makes the threshold binary.
  */
 export function PresidioScoreField({
   id,
   value,
   onChange,
   disabled,
-  showFixedNote = false,
   'aria-label': ariaLabel,
 }: PresidioScoreFieldProps) {
   return (
@@ -40,10 +36,7 @@ export function PresidioScoreField({
         disabled={disabled}
         aria-label={ariaLabel ?? PRESIDIO_SCORE_LABEL}
       />
-      <p className="text-xs text-(--cui-color-text-muted)">{PRESIDIO_SCORE_HELP}</p>
-      {showFixedNote && (
-        <p className="text-xs text-(--cui-color-text-muted)">{PRESIDIO_SCORE_FIXED_NOTE}</p>
-      )}
+      <p className="text-xs text-(--cui-color-text-muted)">{PRESIDIO_SCORE_INTRO}</p>
     </div>
   );
 }

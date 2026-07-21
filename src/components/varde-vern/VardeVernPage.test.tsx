@@ -97,8 +97,17 @@ vi.mock('@/components/configuration/fields', () => ({
       ))}
     </select>
   ),
-  NumberField: (p: { value: number | null; 'aria-label'?: string }) => (
-    <input type="number" aria-label={p['aria-label']} defaultValue={p.value ?? ''} />
+  NumberField: (p: {
+    value: number | undefined;
+    onChange: (v: number | undefined) => void;
+    'aria-label'?: string;
+  }) => (
+    <input
+      type="number"
+      aria-label={p['aria-label']}
+      value={p.value ?? ''}
+      onChange={(e) => p.onChange(e.target.value === '' ? undefined : Number(e.target.value))}
+    />
   ),
 }));
 
@@ -113,115 +122,138 @@ function renderPage() {
 
 const goTab = (name: string) => fireEvent.click(screen.getByRole('button', { name }));
 
-describe('VardeVernPage — nested-tab IA (F12e)', () => {
+const openPresidioTab = async () => {
+  await screen.findByRole('region', { name: 'Entity matrix' });
+  goTab('Presidio Analyzer');
+  return screen.findByRole('region', { name: 'Active in Varde Vern' });
+};
+
+const savedPolicy = (): t.VardeVernPolicyInput => {
+  const arg = saveFn.mock.calls[0]![0] as { data: { policy: t.VardeVernPolicyInput } };
+  return arg.data.policy;
+};
+
+describe('VardeVernPage — table redesign + English-only UI', () => {
   beforeEach(() => {
     queryValue = mockVern;
     canManage = true;
     saveFn.mockClear();
   });
 
-  it('Oversikt is the default tab and shows the entity matrix (local engine / Presidio / effective action)', async () => {
-    queryValue = mockVern;
+  it('Overview is the default tab and shows the entity matrix (local engine / Presidio / effective action)', async () => {
     renderPage();
-    const matrix = await screen.findByRole('region', { name: 'Entitetsmatrise' });
-    // FNR = regex authoritative; PERSON = semantic supplementary; both listed with their effective action.
+    const matrix = await screen.findByRole('region', { name: 'Entity matrix' });
+    // FNR = regex authoritative (backend label); PERSON = semantic supplementary (title-case display name).
     expect(within(matrix).getByText('Fødselsnummer')).toBeInTheDocument();
-    expect(within(matrix).getByText('Person name')).toBeInTheDocument();
-    expect(within(matrix).getAllByText('autoritativ').length).toBeGreaterThan(0);
-    expect(within(matrix).getAllByText('supplerende').length).toBeGreaterThan(0);
+    expect(within(matrix).getByText('Person')).toBeInTheDocument();
+    expect(within(matrix).getAllByText('authoritative').length).toBeGreaterThan(0);
+    expect(within(matrix).getAllByText('supplementary').length).toBeGreaterThan(0);
   });
 
-  it('Lokal PII-motor tab shows the regex section (checksum + enforce/block action)', async () => {
-    queryValue = mockVern;
+  it('Local PII engine tab shows the regex section (checksum + enforce/block action)', async () => {
     renderPage();
-    await screen.findByRole('region', { name: 'Entitetsmatrise' });
-    goTab('Lokal PII-motor');
+    await screen.findByRole('region', { name: 'Entity matrix' });
+    goTab('Local PII engine');
     const regexSection = await screen.findByRole('region', { name: 'Structured & validated data (local regex)' });
     expect(within(regexSection).getByText('Mod-11 checksum')).toBeInTheDocument();
     expect(within(regexSection).getByLabelText('Fødselsnummer policy action')).toBeInTheDocument();
   });
 
-  it('Presidio Analyzer tab shows the integrated semantic section + the panel, and passes canManage', async () => {
-    queryValue = mockVern;
-    canManage = true;
+  it('Presidio Analyzer tab shows the integrated table + the panel, and passes canManage', async () => {
     renderPage();
-    await screen.findByRole('region', { name: 'Entitetsmatrise' });
-    goTab('Presidio Analyzer');
-    const integrated = await screen.findByRole('region', { name: 'Aktivt integrert i Varde Vern' });
-    expect(within(integrated).getByLabelText('Person name minimum Presidio-score')).toBeInTheDocument();
+    const integrated = await openPresidioTab();
+    expect(within(integrated).getByLabelText('Person minimum score')).toBeInTheDocument();
     const panel = screen.getByTestId('presidio-panel');
     expect(panel).toHaveAttribute('data-can-manage', 'true');
   });
 
-  it('the integrated vs reported split is derived from supportedEntities − integratedPresidioEntities', async () => {
-    queryValue = mockVern;
+  it('renders the four table columns: Entity | Detection Policy | Enforcement Mode | Minimum Score', async () => {
     renderPage();
-    await screen.findByRole('region', { name: 'Entitetsmatrise' });
-    goTab('Presidio Analyzer');
-    const integrated = await screen.findByRole('region', { name: 'Aktivt integrert i Varde Vern' });
-    expect(within(integrated).getByText('Person name')).toBeInTheDocument();
-    expect(within(integrated).getByText('Sted')).toBeInTheDocument();
-    expect(within(integrated).getByText('Organisasjon')).toBeInTheDocument();
-    const reported = screen.getByRole('region', {
-      name: 'Rapportert av nåværende Presidio Analyzer, men ikke integrert i Varde Vern',
-    });
+    const integrated = await openPresidioTab();
+    expect(within(integrated).getByRole('columnheader', { name: 'Entity' })).toBeInTheDocument();
+    expect(within(integrated).getByRole('columnheader', { name: 'Detection Policy' })).toBeInTheDocument();
+    expect(within(integrated).getByRole('columnheader', { name: 'Enforcement Mode' })).toBeInTheDocument();
+    expect(within(integrated).getByRole('columnheader', { name: 'Minimum Score' })).toBeInTheDocument();
+    // Title-case display names — never the ALL-CAPS codes — in the Entity column.
+    expect(within(integrated).getByText('Person')).toBeInTheDocument();
+    expect(within(integrated).getByText('Location')).toBeInTheDocument();
+    expect(within(integrated).getByText('Organization')).toBeInTheDocument();
+    expect(within(integrated).queryByText('PERSON')).toBeNull();
+    expect(within(integrated).queryByText('LOCATION')).toBeNull();
+    expect(within(integrated).queryByText('ORG')).toBeNull();
+  });
+
+  it('the shared minimum-score intro renders ONCE above the table (not per entity)', async () => {
+    renderPage();
+    await openPresidioTab();
+    expect(screen.getAllByText(/Findings below an entity's minimum score are ignored/)).toHaveLength(1);
+  });
+
+  it('the integrated vs reported split is derived from supportedEntities − integratedPresidioEntities', async () => {
+    renderPage();
+    const integrated = await openPresidioTab();
+    expect(within(integrated).getByText('Person')).toBeInTheDocument();
+    expect(within(integrated).getByText('Location')).toBeInTheDocument();
+    expect(within(integrated).getByText('Organization')).toBeInTheDocument();
+    const reported = screen.getByRole('region', { name: 'Reported by Presidio, not integrated' });
     // supportedEntities − integratedPresidioEntities = DATE_TIME, NRP (dynamic, not hardcoded).
     expect(within(reported).getByText('DATE_TIME')).toBeInTheDocument();
     expect(within(reported).getByText('NRP')).toBeInTheDocument();
-    expect(within(reported).getAllByText('ikke aktivert i Varde Vern')).toHaveLength(2);
+    expect(within(reported).getAllByText('not integrated')).toHaveLength(2);
     // Integrated types never appear in the reported-only list.
     expect(within(reported).queryByText('PERSON')).toBeNull();
   });
 
-  it('shows the Minimum Presidio-score label + the fixed-0.85 note for each integrated semantic entity', async () => {
-    queryValue = mockVern;
+  it('Detection Policy → Required round-trips as requiredEngines: ["presidio"]', async () => {
     renderPage();
-    await screen.findByRole('region', { name: 'Entitetsmatrise' });
-    goTab('Presidio Analyzer');
-    const integrated = await screen.findByRole('region', { name: 'Aktivt integrert i Varde Vern' });
-    // PERSON/LOCATION/ORG each render the score field label + the spaCy fixed-0.85 note.
-    expect(within(integrated).getAllByText('Minimum Presidio-score')).toHaveLength(3);
-    expect(within(integrated).getAllByText(/fast score 0,85/)).toHaveLength(3);
-  });
-
-  it('offers enforce only for a green semantic entity; non-green shows the quality-gate note', async () => {
-    queryValue = mockVern;
-    renderPage();
-    await screen.findByRole('region', { name: 'Entitetsmatrise' });
-    goTab('Presidio Analyzer');
-    const integrated = await screen.findByRole('region', { name: 'Aktivt integrert i Varde Vern' });
-    // LOCATION + ORG (no green language) → the "krever grønn kvalitetsgate" note; PERSON (green) does not.
-    expect(within(integrated).getAllByText(/krever grønn kvalitetsgate/i)).toHaveLength(2);
-    const personSelect = within(integrated).getByLabelText('Person name policy action');
-    expect(within(personSelect).getByRole('option', { name: 'Håndhev (maskér)' })).toBeInTheDocument();
-    const locationSelect = within(integrated).getByLabelText('Sted policy action');
-    expect(within(locationSelect).queryByRole('option', { name: 'Håndhev (maskér)' })).toBeNull();
-  });
-
-  it('BLOCKER-5: a semantic enforce round-trips enforceLanguages in the saved payload', async () => {
-    queryValue = mockVern;
-    canManage = true;
-    saveFn.mockClear();
-    renderPage();
-    await screen.findByRole('region', { name: 'Entitetsmatrise' });
-    goTab('Presidio Analyzer');
-    const action = await screen.findByLabelText('Person name policy action');
-    fireEvent.change(action, { target: { value: 'enforce' } });
-    fireEvent.click(screen.getByLabelText('PERSON enforce nb'));
+    const integrated = await openPresidioTab();
+    fireEvent.change(within(integrated).getByLabelText('Person detection policy'), {
+      target: { value: 'required' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(saveFn).toHaveBeenCalledTimes(1));
-    const arg = saveFn.mock.calls[0]![0] as { data: { policy: t.VardeVernPolicyInput } };
-    expect(arg.data.policy.entities.PERSON!.action).toBe('enforce');
-    expect(arg.data.policy.entities.PERSON!.enforceLanguages).toContain('nb');
+    expect(savedPolicy().entities.PERSON!.requiredEngines).toEqual(['presidio']);
+  });
+
+  it('Enforcement Mode → Enforce auto-sets enforceLanguages to the green languages and shows them muted', async () => {
+    renderPage();
+    const integrated = await openPresidioTab();
+    fireEvent.change(within(integrated).getByLabelText('Person enforcement mode'), {
+      target: { value: 'enforce' },
+    });
+    expect(within(integrated).getByText('nb, en')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(saveFn).toHaveBeenCalledTimes(1));
+    expect(savedPolicy().entities.PERSON!.action).toBe('enforce');
+    expect(savedPolicy().entities.PERSON!.enforceLanguages).toEqual(['nb', 'en']);
+  });
+
+  it('Minimum Score edits round-trip as minConfidence', async () => {
+    renderPage();
+    const integrated = await openPresidioTab();
+    fireEvent.change(within(integrated).getByLabelText('Person minimum score'), {
+      target: { value: '0.55' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(saveFn).toHaveBeenCalledTimes(1));
+    expect(savedPolicy().entities.PERSON!.minConfidence).toBe(0.55);
+  });
+
+  it('offers Enforce only for a green entity; non-green omits it with the quality-gate tooltip', async () => {
+    renderPage();
+    const integrated = await openPresidioTab();
+    const personSelect = within(integrated).getByLabelText('Person enforcement mode');
+    expect(within(personSelect).getByRole('option', { name: 'Enforce' })).toBeInTheDocument();
+    const locationSelect = within(integrated).getByLabelText('Location enforcement mode');
+    expect(within(locationSelect).queryByRole('option', { name: 'Enforce' })).toBeNull();
+    const orgSelect = within(integrated).getByLabelText('Organization enforcement mode');
+    expect(within(orgSelect).queryByRole('option', { name: 'Enforce' })).toBeNull();
+    expect(within(integrated).getAllByTitle('Requires a green quality gate')).toHaveLength(2);
   });
 
   it('the Presidio rollout status (optional/required) is editable and round-trips', async () => {
-    queryValue = mockVern;
-    canManage = true;
-    saveFn.mockClear();
     renderPage();
-    await screen.findByRole('region', { name: 'Entitetsmatrise' });
-    goTab('Presidio Analyzer');
+    await openPresidioTab();
     const status = await screen.findByLabelText('presidio status');
     fireEvent.change(status, { target: { value: 'required' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
@@ -234,44 +266,25 @@ describe('VardeVernPage — nested-tab IA (F12e)', () => {
   });
 
   it('seeds semantic entities to the backend shadow default (no hardcoded enforce fallback)', async () => {
-    queryValue = mockVern;
     renderPage();
-    await screen.findByRole('region', { name: 'Entitetsmatrise' });
-    goTab('Presidio Analyzer');
+    const integrated = await openPresidioTab();
     // LOCATION has no policy entry — its control reflects the backend default (shadow), not a forced enforce.
-    const locationSelect = await screen.findByLabelText('Sted policy action');
+    const locationSelect = within(integrated).getByLabelText('Location enforcement mode');
     expect((locationSelect as HTMLSelectElement).value).toBe('shadow');
   });
 
-  it('the local regex rollout is locked to enforce (Lokal tab)', async () => {
-    queryValue = mockVern;
+  it('the local regex rollout is locked to enforce (Local tab)', async () => {
     renderPage();
-    await screen.findByRole('region', { name: 'Entitetsmatrise' });
-    goTab('Lokal PII-motor');
+    await screen.findByRole('region', { name: 'Entity matrix' });
+    goTab('Local PII engine');
     const rollout = await screen.findByRole('region', { name: 'Rollout' });
     expect(within(rollout).getByText(/enforce \(locked\)/)).toBeInTheDocument();
   });
 
-  it('F149f/F12f: setting a semantic entity to enforce reveals the per-language gate checkboxes', async () => {
-    queryValue = mockVern;
-    renderPage();
-    await screen.findByRole('region', { name: 'Entitetsmatrise' });
-    goTab('Presidio Analyzer');
-    const action = await screen.findByLabelText('Person name policy action');
-    fireEvent.change(action, { target: { value: 'enforce' } });
-    // Per-language checkboxes appear (nb + en, from the analyzer languages).
-    expect(screen.getByLabelText('PERSON enforce nb')).toBeInTheDocument();
-    expect(screen.getByLabelText('PERSON enforce en')).toBeInTheDocument();
-    expect(screen.getByText(/no language gated/i)).toBeInTheDocument();
-  });
-
   it('Save sends the edited policy + rollout with the expectedRevision', async () => {
-    queryValue = mockVern;
-    canManage = true;
-    saveFn.mockClear();
     renderPage();
-    await screen.findByRole('region', { name: 'Entitetsmatrise' });
-    goTab('Lokal PII-motor');
+    await screen.findByRole('region', { name: 'Entity matrix' });
+    goTab('Local PII engine');
     const emailAction = await screen.findByLabelText('E-post policy action');
     fireEvent.change(emailAction, { target: { value: 'block' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
@@ -279,6 +292,21 @@ describe('VardeVernPage — nested-tab IA (F12e)', () => {
     const arg = saveFn.mock.calls[0]![0] as { data: { expectedRevision: number; policy: t.VardeVernPolicyInput } };
     expect(arg.data.expectedRevision).toBe(3);
     expect(arg.data.policy.entities.EMAIL!.action).toBe('block');
+  });
+
+  it('no Norwegian UI strings remain in the feature area', async () => {
+    renderPage();
+    await openPresidioTab();
+    expect(screen.queryByText('Oversikt')).toBeNull();
+    expect(screen.queryByText('Lokal PII-motor')).toBeNull();
+    expect(screen.queryByText('Entitetsmatrise')).toBeNull();
+    expect(screen.queryByText('Aktivt integrert i Varde Vern')).toBeNull();
+    expect(screen.queryByText(/Håndhev/)).toBeNull();
+    expect(screen.queryByText(/krever grønn kvalitetsgate/)).toBeNull();
+    expect(screen.queryByText(/ikke aktivert i Varde Vern/)).toBeNull();
+    expect(screen.queryByText(/Minimum Presidio-score/)).toBeNull();
+    expect(screen.queryByText(/Funn med Presidio-score/)).toBeNull();
+    expect(screen.queryByText(/fast score 0,85/)).toBeNull();
   });
 
   it('warns when a stored value failed validation', async () => {
@@ -289,10 +317,9 @@ describe('VardeVernPage — nested-tab IA (F12e)', () => {
   });
 
   it('without MANAGE_CONFIGS the Save button is disabled', async () => {
-    queryValue = mockVern;
     canManage = false;
     renderPage();
-    await screen.findByRole('region', { name: 'Entitetsmatrise' });
+    await screen.findByRole('region', { name: 'Entity matrix' });
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
     canManage = true;
   });

@@ -1,13 +1,29 @@
 import type * as t from '@/types';
 
-/** The Minimum Presidio-score field label + help text (shared by the per-entity settings and the test
- *  studio). It is a COARSE cutoff on a raw Presidio score — never a calibrated probability or security level. */
-export const PRESIDIO_SCORE_LABEL = 'Minimum Presidio-score';
-export const PRESIDIO_SCORE_HELP =
-  'Funn med Presidio-score under denne grensen ignoreres. Scoren er en teknisk verdi fra Presidio, og er ikke nødvendigvis en prosentvis sannsynlighet.';
-/** Shown for today's spaCy-based semantic entities (`scoreModel === 'spacy-ner-fixed'`) + the test studio. */
-export const PRESIDIO_SCORE_FIXED_NOTE =
-  'Den aktive spaCy-recognizeren returnerer for tiden fast score 0,85 for semantiske NER-funn. Terskelen gir derfor ikke finjustering i denne versjonen: verdier på eller under 0,85 godtar funnene, mens verdier over 0,85 filtrerer dem bort.';
+/** The minimum-score label + the ONE consolidated intro (shared by the integrated-entities table and the
+ *  test studio). It is a COARSE cutoff on a raw Presidio score — never a calibrated probability. */
+export const PRESIDIO_SCORE_LABEL = 'Minimum score';
+export const PRESIDIO_SCORE_INTRO =
+  "Findings below an entity's minimum score are ignored. The score is a technical value from Presidio — not a calibrated probability; the current spaCy recognizer returns a fixed 0.85 for semantic entities, so values above 0.85 filter findings out.";
+
+const ENTITY_DISPLAY_NAMES: Record<string, string> = {
+  PERSON: 'Person',
+  LOCATION: 'Location',
+  ORG: 'Organization',
+  ORGANIZATION: 'Organization',
+};
+
+/** Title-case display name for a semantic entity code — the ALL-CAPS codes stay internal, never body text. */
+export function entityDisplayName(entityType: string): string {
+  return (
+    ENTITY_DISPLAY_NAMES[entityType] ??
+    entityType
+      .toLowerCase()
+      .split('_')
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ')
+  );
+}
 
 export interface EngineSplit {
   regex: t.VardeVernEntity[];
@@ -29,7 +45,7 @@ export function groupEntitiesByEngine(entities: readonly t.VardeVernEntity[]): E
 }
 
 /**
- * The green languages an entity may enforce/block in — the per-entity språk-gate the panel renders.
+ * The green languages an entity may enforce/block in — the per-entity language gate the panel renders.
  * Prefers the per-entity `enforceGreenLanguages` (SEMANTIC only); falls back to deriving from the
  * top-level `enforceableGreen` list. NEVER hardcoded — an empty result means enforce is not yet allowed.
  */

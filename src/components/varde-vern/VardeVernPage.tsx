@@ -4,17 +4,24 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import type { Tone } from './operations';
 import type * as t from '@/types';
-import { groupEntitiesByEngine, phaseTone, actionTone, greenLanguagesFor, reportedNotIntegrated } from './operations';
+import {
+  groupEntitiesByEngine,
+  reportedNotIntegrated,
+  entityDisplayName,
+  greenLanguagesFor,
+  phaseTone,
+  actionTone,
+  PRESIDIO_SCORE_INTRO,
+} from './operations';
+import { SelectField, NumberField } from '@/components/configuration/fields';
 import { vardeVernQueryOptions, saveVardeVernFn } from '@/server';
-import { SelectField } from '@/components/configuration/fields';
 import { EmptyState, LoadingState } from '@/components/shared';
-import { PresidioScoreField } from './PresidioScoreField';
 import { notifySuccess, notifyError, cn } from '@/utils';
 import { SystemCapabilities } from '@/constants';
 import { PresidioPanel } from './PresidioPanel';
 import { useCapabilities } from '@/hooks';
 
-type SubTab = 'oversikt' | 'lokal' | 'presidio';
+type SubTab = 'overview' | 'local' | 'presidio';
 
 const TONE_CLASS: Record<Tone, string> = {
   protective: 'bg-(--cui-color-background-success) text-(--cui-color-text-success)',
@@ -27,22 +34,28 @@ const REGEX_ACTIONS: t.SelectOption[] = [
   { label: 'Enforce (mask)', value: 'enforce' },
   { label: 'Block (reject)', value: 'block' },
 ];
-// Integrated semantic entities are presented as off/shadow/enforce; enforce is offered ONLY when the entity
-// has a green quality gate (below). 'Av' maps to the `allow` action (measured/masked by neither engine).
-const SEMANTIC_OFF: t.SelectOption = { label: 'Av (ikke aktiv)', value: 'allow' };
-const SEMANTIC_SHADOW: t.SelectOption = { label: 'Skygge (måler)', value: 'shadow' };
-const SEMANTIC_ENFORCE: t.SelectOption = { label: 'Håndhev (maskér)', value: 'enforce' };
-const SEMANTIC_ACTIONS_SHADOW_ONLY: t.SelectOption[] = [SEMANTIC_OFF, SEMANTIC_SHADOW];
-const SEMANTIC_ACTIONS_GREEN: t.SelectOption[] = [SEMANTIC_OFF, SEMANTIC_SHADOW, SEMANTIC_ENFORCE];
+// Integrated semantic entities: Off/Shadow/Enforce; Enforce is offered ONLY when the entity has a green
+// quality gate. 'Off' maps to the `allow` action (measured/masked by neither engine).
+const ENFORCEMENT_OFF: t.SelectOption = { label: 'Off', value: 'allow' };
+const ENFORCEMENT_SHADOW: t.SelectOption = { label: 'Shadow', value: 'shadow' };
+const ENFORCEMENT_ENFORCE: t.SelectOption = { label: 'Enforce', value: 'enforce' };
+const ENFORCEMENT_SHADOW_ONLY: t.SelectOption[] = [ENFORCEMENT_OFF, ENFORCEMENT_SHADOW];
+const ENFORCEMENT_GREEN: t.SelectOption[] = [ENFORCEMENT_OFF, ENFORCEMENT_SHADOW, ENFORCEMENT_ENFORCE];
+const GREEN_GATE_TOOLTIP = 'Requires a green quality gate';
+// Detection Policy — Required maps to the per-entity `requiredEngines: ['presidio']`, Optional to [].
+const DETECTION_OPTIONS: t.SelectOption[] = [
+  { label: 'Optional', value: 'optional' },
+  { label: 'Required', value: 'required' },
+];
 const PHASE_OPTIONS: t.SelectOption[] = [
   { label: 'Off', value: 'off' },
   { label: 'Shadow', value: 'shadow' },
   { label: 'Enforce', value: 'enforce' },
 ];
-// Presidio-motor rollout status (regex is always required + locked; Presidio is admin-editable).
+// Presidio engine rollout status (regex is always required + locked; Presidio is admin-editable).
 const STATUS_OPTIONS: t.SelectOption[] = [
-  { label: 'Valgfri (optional)', value: 'optional' },
-  { label: 'Påkrevd (required)', value: 'required' },
+  { label: 'Optional', value: 'optional' },
+  { label: 'Required', value: 'required' },
 ];
 
 function Badge({ tone, children }: { tone: Tone; children: ReactNode }) {
@@ -63,8 +76,21 @@ function Section({ title, description, children }: { title: string; description:
   );
 }
 
+function ColumnHeader({ label, tooltip }: { label: string; tooltip?: string }) {
+  return (
+    <th scope="col" className="px-4 py-2.5 font-medium text-(--cui-color-text-muted)">
+      {label}
+      {tooltip && (
+        <span aria-hidden="true" title={tooltip} className="ml-1 cursor-help">
+          ?
+        </span>
+      )}
+    </th>
+  );
+}
+
 function isSubTab(v: string): v is SubTab {
-  return v === 'oversikt' || v === 'lokal' || v === 'presidio';
+  return v === 'overview' || v === 'local' || v === 'presidio';
 }
 
 export function VardeVernPage() {
@@ -73,7 +99,7 @@ export function VardeVernPage() {
   const canManage = hasCapability(SystemCapabilities.MANAGE_CONFIGS);
   const { data, isLoading, isError, error } = useQuery(vardeVernQueryOptions);
 
-  const [subTab, setSubTab] = useState<SubTab>('oversikt');
+  const [subTab, setSubTab] = useState<SubTab>('overview');
   const [policy, setPolicy] = useState<t.VardeVernPolicyInput | null>(null);
   const [rollout, setRollout] = useState<t.VardeVernRolloutEngine[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -100,7 +126,7 @@ export function VardeVernPage() {
   const analyzerLanguages = data.presidio?.languages ?? (data.presidio?.language ? [data.presidio.language] : ['nb', 'en']);
   const notIntegrated = reportedNotIntegrated(data.presidio);
   // Backend-provided per-entity views drive the editable defaults — no hardcoded client-side fallback, so the
-  // seeded shadow baseline for PERSON/LOCATION/ORG renders correctly.
+  // seeded shadow baseline for the semantic entities renders correctly.
   const entityViews: Record<string, t.VardeVernEntity> = Object.fromEntries(
     data.entities.map((e) => [e.entityType, e]),
   );
@@ -122,13 +148,6 @@ export function VardeVernPage() {
     setPolicy((prev) =>
       prev ? { ...prev, entities: { ...prev.entities, [type]: { ...entryOf(type), ...patch } } } : prev,
     );
-  const toggleEnforceLanguage = (type: string, lang: string) =>
-    setPolicy((prev) => {
-      if (!prev) return prev;
-      const cur = new Set(entryOf(type).enforceLanguages ?? []);
-      cur.has(lang) ? cur.delete(lang) : cur.add(lang);
-      return { ...prev, entities: { ...prev.entities, [type]: { ...entryOf(type), enforceLanguages: [...cur] } } };
-    });
   const setPhase = (engineId: string, rolloutPhase: t.VardeVernRolloutPhase) =>
     setRollout((prev) =>
       prev ? prev.map((e) => (e.engineId === engineId ? { ...e, rolloutPhase } : e)) : prev,
@@ -157,7 +176,7 @@ export function VardeVernPage() {
     }
   };
 
-  // Regex entities (Lokal PII-motor tab): checksum badge + enforce/block only — never a confidence slider.
+  // Regex entities (Local PII engine tab): checksum badge + enforce/block only — never a confidence slider.
   const entityRow = (entity: t.VardeVernEntity) => {
     const entry = entryOf(entity.entityType);
     return (
@@ -186,73 +205,76 @@ export function VardeVernPage() {
     );
   };
 
-  // Integrated semantic entities (Presidio tab): off/shadow/enforce, Minimum Presidio-score, and the
-  // green-gated per-language enforce control. Enforce is offered ONLY when the entity has green languages.
+  // Integrated semantic entities (Presidio tab): one table row per entity — Entity | Detection Policy |
+  // Enforcement Mode | Minimum Score. Enforce is offered ONLY for a green entity, and selecting it auto-sets
+  // `enforceLanguages` to the entity's green languages (the proxy requires it).
   const integratedEntityRow = (entity: t.VardeVernEntity) => {
     const entry = entryOf(entity.entityType);
     const green = greenLanguagesFor(entity, data.enforceableGreen);
     const canEnforce = green.length > 0;
-    const enforcing = entry.action === 'enforce';
+    const name = entityDisplayName(entity.entityType);
+    const detection = entry.requiredEngines.includes('presidio') ? 'required' : 'optional';
+    const setEnforcement = (action: t.VardeVernAction) =>
+      setEntity(
+        entity.entityType,
+        action === 'enforce' ? { action, enforceLanguages: green } : { action },
+      );
     return (
-      <div
-        key={entity.entityType}
-        className="flex flex-col gap-3 border-b border-(--cui-color-stroke-default) py-3 last:border-0"
-      >
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <span className="block text-sm font-medium text-(--cui-color-text-default)">{entity.label}</span>
-            <span className="block text-xs text-(--cui-color-text-muted)">
-              {entity.entityType} · norsk (nb) + engelsk (en) modellintegrasjon
-            </span>
-          </div>
-          <div className="flex flex-col items-start gap-1 sm:items-end">
+      <tr key={entity.entityType} className="border-b border-(--cui-color-stroke-default) last:border-b-0">
+        <td className="px-4 py-2.5 align-top">
+          <span className="text-sm font-medium text-(--cui-color-text-default)">{name}</span>
+        </td>
+        <td className="px-4 py-2.5 align-top">
+          <SelectField
+            id={`detection-${entity.entityType}`}
+            value={detection}
+            options={DETECTION_OPTIONS}
+            onChange={(v) => setEntity(entity.entityType, { requiredEngines: v === 'required' ? ['presidio'] : [] })}
+            disabled={disabled}
+            aria-label={`${name} detection policy`}
+          />
+        </td>
+        <td className="px-4 py-2.5 align-top">
+          <div className="flex items-center gap-2">
             <SelectField
               id={`action-${entity.entityType}`}
               value={entry.action}
-              options={canEnforce ? SEMANTIC_ACTIONS_GREEN : SEMANTIC_ACTIONS_SHADOW_ONLY}
-              onChange={(v) => setEntity(entity.entityType, { action: v as t.VardeVernAction })}
+              options={canEnforce ? ENFORCEMENT_GREEN : ENFORCEMENT_SHADOW_ONLY}
+              onChange={(v) => setEnforcement(v as t.VardeVernAction)}
               disabled={disabled}
-              aria-label={`${entity.label} policy action`}
+              aria-label={`${name} enforcement mode`}
             />
             {!canEnforce && (
-              <span className="text-xs text-(--cui-color-text-muted)">
-                Håndhev krever grønn kvalitetsgate
+              <span
+                aria-hidden="true"
+                title={GREEN_GATE_TOOLTIP}
+                className="cursor-help text-xs text-(--cui-color-text-muted)"
+              >
+                ?
               </span>
             )}
           </div>
-        </div>
-        <PresidioScoreField
-          id={`conf-${entity.entityType}`}
-          value={entry.minConfidence ?? entity.minConfidence}
-          onChange={(v) => setEntity(entity.entityType, { minConfidence: v ?? undefined })}
-          disabled={disabled}
-          showFixedNote={entity.scoreModel === 'spacy-ner-fixed'}
-          aria-label={`${entity.label} minimum Presidio-score`}
-        />
-        {/* Green-gated språk-gate: enforce is per-language and limited to the entity's green languages. */}
-        {enforcing && (
-          <fieldset className="flex flex-wrap items-center gap-3 pl-1">
-            <legend className="mr-1 text-xs text-(--cui-color-text-muted)">
-              Håndhev for språk (kun grønt-gatede språk):
-            </legend>
-            {green.map((lang) => (
-              <label key={lang} className="flex items-center gap-1 text-xs text-(--cui-color-text-default)">
-                <input
-                  type="checkbox"
-                  aria-label={`${entity.entityType} enforce ${lang}`}
-                  checked={(entry.enforceLanguages ?? []).includes(lang)}
-                  disabled={disabled}
-                  onChange={() => toggleEnforceLanguage(entity.entityType, lang)}
-                />
-                {lang}
-              </label>
-            ))}
-            {(entry.enforceLanguages ?? []).length === 0 && (
-              <Badge tone="measuring">no language gated — save will be rejected</Badge>
-            )}
-          </fieldset>
-        )}
-      </div>
+          {entry.action === 'enforce' && (
+            <span className="mt-1 block text-xs text-(--cui-color-text-muted)">
+              {(entry.enforceLanguages ?? []).join(', ')}
+            </span>
+          )}
+        </td>
+        <td className="px-4 py-2.5 align-top">
+          <div className="w-24">
+            <NumberField
+              id={`conf-${entity.entityType}`}
+              value={entry.minConfidence ?? entity.minConfidence}
+              onChange={(v) => setEntity(entity.entityType, { minConfidence: v })}
+              min={0}
+              max={1}
+              step={0.05}
+              disabled={disabled}
+              aria-label={`${name} minimum score`}
+            />
+          </div>
+        </td>
+      </tr>
     );
   };
 
@@ -328,66 +350,67 @@ export function VardeVernPage() {
         ariaLabel="Varde Vern"
       >
         <Tabs.TriggersList>
-          <Tabs.Trigger value="oversikt">Oversikt</Tabs.Trigger>
-          <Tabs.Trigger value="lokal">Lokal PII-motor</Tabs.Trigger>
+          <Tabs.Trigger value="overview">Overview</Tabs.Trigger>
+          <Tabs.Trigger value="local">Local PII engine</Tabs.Trigger>
           <Tabs.Trigger value="presidio">Presidio Analyzer</Tabs.Trigger>
         </Tabs.TriggersList>
-        <Tabs.Content value="oversikt" tabIndex={-1} />
-        <Tabs.Content value="lokal" tabIndex={-1} />
+        <Tabs.Content value="overview" tabIndex={-1} />
+        <Tabs.Content value="local" tabIndex={-1} />
         <Tabs.Content value="presidio" tabIndex={-1} />
       </Tabs>
 
-      {subTab === 'oversikt' && (
+      {subTab === 'overview' && (
         <div className="flex flex-col gap-4">
           <Section
-            title="Operativ status"
-            description="Varde Vern er ubetinget fail-closed. Lokal regex er alltid autoritativ (required + enforce); Presidio er supplerende."
+            title="Operational status"
+            description="Varde Vern is unconditionally fail-closed. The local regex engine is always authoritative (required + enforce); Presidio is supplementary."
           >
             <div className="grid grid-cols-1 gap-x-8 gap-y-1 sm:grid-cols-2">
               <div className="flex items-center justify-between py-1 text-sm">
                 <span className="text-(--cui-color-text-muted)">Fail-closed</span>
-                <Badge tone="protective">alltid på (låst)</Badge>
+                <Badge tone="protective">always on (locked)</Badge>
               </div>
               <div className="flex items-center justify-between py-1 text-sm">
-                <span className="text-(--cui-color-text-muted)">Lokal regex</span>
+                <span className="text-(--cui-color-text-muted)">Local regex</span>
                 <Badge tone="protective">required · enforce</Badge>
               </div>
               <div className="flex items-center justify-between py-1 text-sm">
                 <span className="text-(--cui-color-text-muted)">Presidio</span>
                 <Badge tone={data.presidio?.configured ? phaseTone(presidioEngine?.rolloutPhase ?? 'off') : 'inactive'}>
-                  {data.presidio?.configured ? `${data.presidio.state ?? 'unknown'} · ${presidioEngine?.rolloutPhase ?? 'off'}` : 'ikke konfigurert'}
+                  {data.presidio?.configured ? `${data.presidio.state ?? 'unknown'} · ${presidioEngine?.rolloutPhase ?? 'off'}` : 'not configured'}
                 </Badge>
               </div>
               <div className="flex items-center justify-between py-1 text-sm">
-                <span className="text-(--cui-color-text-muted)">Språk</span>
+                <span className="text-(--cui-color-text-muted)">Languages</span>
                 <Badge tone="inactive">{analyzerLanguages.join(', ') || '—'}</Badge>
               </div>
             </div>
           </Section>
 
           <Section
-            title="Entitetsmatrise"
-            description="Per entitet: lokal motor, Presidio og effektiv handling. Drevet av backend."
+            title="Entity matrix"
+            description="Per entity: the local engine, Presidio, and the effective action. Driven by the backend."
           >
             <div className="overflow-x-auto rounded-lg border border-(--cui-color-stroke-default)">
               <table className="w-full text-left text-sm">
                 <thead className="text-(--cui-color-text-muted)">
                   <tr>
-                    <th className="px-3 py-2">Entitet</th>
-                    <th className="px-3 py-2">Lokal motor</th>
+                    <th className="px-3 py-2">Entity</th>
+                    <th className="px-3 py-2">Local engine</th>
                     <th className="px-3 py-2">Presidio</th>
-                    <th className="px-3 py-2">Effektiv handling</th>
+                    <th className="px-3 py-2">Effective action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.entities.map((e) => (
                     <tr key={e.entityType} className="border-t border-(--cui-color-stroke-default)">
                       <td className="px-3 py-2">
-                        <span className="font-medium">{e.label}</span>
-                        <span className="ml-1 text-xs text-(--cui-color-text-muted)">{e.entityType}</span>
+                        <span className="font-medium">
+                          {e.engine === 'semantic' ? entityDisplayName(e.entityType) : e.label}
+                        </span>
                       </td>
-                      <td className="px-3 py-2">{e.engine === 'regex' ? <Badge tone="protective">autoritativ</Badge> : '–'}</td>
-                      <td className="px-3 py-2">{e.engine === 'semantic' ? <Badge tone="measuring">supplerende</Badge> : '–'}</td>
+                      <td className="px-3 py-2">{e.engine === 'regex' ? <Badge tone="protective">authoritative</Badge> : '–'}</td>
+                      <td className="px-3 py-2">{e.engine === 'semantic' ? <Badge tone="measuring">supplementary</Badge> : '–'}</td>
                       <td className="px-3 py-2"><Badge tone={actionTone(e.action)}>{e.action}</Badge></td>
                     </tr>
                   ))}
@@ -398,7 +421,7 @@ export function VardeVernPage() {
         </div>
       )}
 
-      {subTab === 'lokal' && (
+      {subTab === 'local' && (
         <div className="flex flex-col gap-4">
           <Section
             title="Structured & validated data (local regex)"
@@ -418,34 +441,49 @@ export function VardeVernPage() {
       {subTab === 'presidio' && (
         <div className="flex flex-col gap-4">
           <Section
-            title="Presidio-motor"
-            description="Status: valgfri (optional) eller påkrevd (required). Fase: av (inaktiv) · skygge (måler uten maskering) · håndhev (maskerer før LLM-en; krever grønn kvalitetsgate)."
+            title="Presidio engine"
+            description="Status: optional or required. Phase: off (inactive) · shadow (measures without masking) · enforce (masks before the LLM; requires a green quality gate)."
           >
             {rollout.filter((e) => e.engineId !== 'regex').length === 0 ? (
-              <p className="py-2 text-xs text-(--cui-color-text-muted)">Presidio har ingen utrullingsoppføring ennå.</p>
+              <p className="py-2 text-xs text-(--cui-color-text-muted)">Presidio has no rollout entry yet.</p>
             ) : (
               rollout.filter((e) => e.engineId !== 'regex').map(rolloutRow)
             )}
           </Section>
 
           <Section
-            title="Aktivt integrert i Varde Vern"
-            description="PERSON, STED (LOCATION) og ORGANISASJON (ORG) — supplerende AI/Presidio-deteksjon med norsk (nb) og engelsk (en) modellintegrasjon. Håndhev tilbys kun for språk med grønn kvalitetsgate; ellers er skygge/av tilgjengelig. Strukturerte typer som e-post (EMAIL), telefon (PHONE), fødselsnummer (FNR), IBAN og organisasjonsnummer (ORG_NR) dekkes allerede av den lokale PII-motoren (regex) — se fanen «Lokal PII-motor» — og er ikke manglende Presidio-funksjoner."
+            title="Active in Varde Vern"
+            description="Supplementary AI/Presidio detection for the integrated semantic entities. Structured types such as email, phone, and national identity numbers are covered by the local PII engine — see the Local PII engine tab."
           >
             {semantic.length === 0 ? (
-              <p className="py-2 text-xs text-(--cui-color-text-muted)">Ingen integrerte semantiske entiteter i katalogen.</p>
+              <p className="py-2 text-xs text-(--cui-color-text-muted)">No integrated semantic entities in the catalog.</p>
             ) : (
-              semantic.map(integratedEntityRow)
+              <>
+                <p className="mb-3 text-xs text-(--cui-color-text-muted)">{PRESIDIO_SCORE_INTRO}</p>
+                <div className="overflow-x-auto rounded-lg border border-(--cui-color-stroke-default)">
+                  <table className="w-full text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-(--cui-color-stroke-default) bg-(--cui-color-background-muted)">
+                        <ColumnHeader label="Entity" />
+                        <ColumnHeader label="Detection Policy" />
+                        <ColumnHeader label="Enforcement Mode" />
+                        <ColumnHeader label="Minimum Score" tooltip={PRESIDIO_SCORE_INTRO} />
+                      </tr>
+                    </thead>
+                    <tbody>{semantic.map(integratedEntityRow)}</tbody>
+                  </table>
+                </div>
+              </>
             )}
           </Section>
 
           <Section
-            title="Rapportert av nåværende Presidio Analyzer, men ikke integrert i Varde Vern"
-            description="Utledet dynamisk: entiteter den kjørende analysemotoren rapporterer, minus de Varde Vern faktisk etterspør og integrerer. At en type rapporteres betyr ikke at norsk/engelsk kvalitet er verifisert. Disse kan ikke settes til skygge/håndhev."
+            title="Reported by Presidio, not integrated"
+            description="Derived dynamically: entity types the running analyzer reports, minus those Varde Vern actually requests and integrates."
           >
             {notIntegrated.length === 0 ? (
               <p className="py-2 text-xs text-(--cui-color-text-muted)">
-                Ingen ekstra typer rapporteres av den kjørende analysemotoren.
+                No additional types are reported by the running analyzer.
               </p>
             ) : (
               <div className="flex flex-wrap gap-2">
@@ -455,28 +493,16 @@ export function VardeVernPage() {
                     className="inline-flex items-center gap-2 rounded-md border border-(--cui-color-stroke-default) px-2 py-1 text-xs text-(--cui-color-text-default)"
                   >
                     <span className="font-mono">{entity}</span>
-                    <Badge tone="inactive">ikke aktivert i Varde Vern</Badge>
+                    <Badge tone="inactive">not integrated</Badge>
                   </span>
                 ))}
               </div>
             )}
-            <div className="mt-3 text-xs text-(--cui-color-text-muted)">
-              <p className="mb-1">
-                «Ikke aktivert» betyr at entiteten rapporteres av den kjørende Presidio-analysemotoren, men
-                ennå ikke er integrert i Varde Vern. En slik entitet:
-              </p>
-              <ul className="list-disc pl-5">
-                <li>etterspørres ikke av Varde Vern i den ordinære chat-flyten;</li>
-                <li>har ingen Varde-type/mapping eller policy;</li>
-                <li>har ingen definerte konfidens- eller språkgater;</li>
-                <li>kan ikke maskeres eller håndheves;</li>
-                <li>er ikke kvalitetstestet som en Varde Vern-funksjon.</li>
-              </ul>
-              <p className="mt-1">
-                Den kan legges til senere, men bare sammen med mapping, policy, språkstøtte, et syntetisk
-                korpus, en kvalitetsgate og tester.
-              </p>
-            </div>
+            <p className="mt-3 text-xs text-(--cui-color-text-muted)">
+              Not integrated means the type is reported by the analyzer but not requested by Varde Vern: it
+              has no mapping, policy, or quality gates and cannot be set to Shadow or Enforce. Integration
+              requires a mapping, a policy, language support, a synthetic corpus, and a green quality gate.
+            </p>
           </Section>
 
           <Section

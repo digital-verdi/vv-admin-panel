@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type * as t from '@/types';
-import { groupEntitiesByEngine, phaseTone, actionTone } from './operations';
+import { groupEntitiesByEngine, entityDisplayName, phaseTone, actionTone } from './operations';
 
 const entity = (over: Partial<t.VardeVernEntity>): t.VardeVernEntity => ({
   entityType: 'X',
@@ -28,6 +28,20 @@ describe('groupEntitiesByEngine', () => {
     const split = groupEntitiesByEngine([]);
     expect(split.regex).toEqual([]);
     expect(split.semantic).toEqual([]);
+  });
+});
+
+describe('entityDisplayName', () => {
+  it('maps the integrated codes to title-case display names', () => {
+    expect(entityDisplayName('PERSON')).toBe('Person');
+    expect(entityDisplayName('LOCATION')).toBe('Location');
+    expect(entityDisplayName('ORG')).toBe('Organization');
+    expect(entityDisplayName('ORGANIZATION')).toBe('Organization');
+  });
+
+  it('title-cases unknown codes as a fallback', () => {
+    expect(entityDisplayName('DATE_TIME')).toBe('Date Time');
+    expect(entityDisplayName('NRP')).toBe('Nrp');
   });
 });
 

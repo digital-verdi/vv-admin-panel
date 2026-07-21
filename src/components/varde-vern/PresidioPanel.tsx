@@ -8,6 +8,7 @@ import type * as t from '@/types';
 import { SelectField, TextareaField } from '@/components/configuration/fields';
 import { testPresidioFn, refreshPresidioFn } from '@/server';
 import { PresidioScoreField } from './PresidioScoreField';
+import { entityDisplayName } from './operations';
 import { SpanMarker } from './SpanMarker';
 import { cn, notifyError } from '@/utils';
 
@@ -18,7 +19,7 @@ const TONE_CLASS: Record<Tone, string> = {
 };
 
 const LANGUAGE_OPTIONS: t.SelectOption[] = [
-  { label: 'Norsk (nb)', value: 'nb' },
+  { label: 'Norwegian (nb)', value: 'nb' },
   { label: 'English (en)', value: 'en' },
 ];
 
@@ -108,7 +109,7 @@ export function PresidioPanel({ status, canManage = false, entityActions = {} }:
         start: f.startUtf16,
         end: f.endUtf16,
         tone: f.abovePolicyThreshold ? 'protective' : 'measuring',
-        label: `${f.entityType} · ${Math.round(f.score * 100)}%`,
+        label: `${entityDisplayName(f.entityType)} · ${Math.round(f.score * 100)}%`,
       })),
     [findings],
   );
@@ -187,15 +188,14 @@ export function PresidioPanel({ status, canManage = false, entityActions = {} }:
           rows={3}
           placeholder="Synthetic text to analyze"
         />
-        {/* F12f: the score_threshold the server-fn supports — same Minimum Presidio-score cutoff (+ the
-            fixed-0.85 note, since the studio analyzes today's spaCy-based PERSON/LOCATION/ORG). */}
+        {/* F12f: the score_threshold the server-fn supports — the same minimum-score cutoff, with the ONE
+            consolidated intro line (never per-field repetition). */}
         <div className="mt-2">
           <PresidioScoreField
             id="presidio-test-threshold"
-            aria-label="Test-studio minimum Presidio-score"
+            aria-label="Test studio minimum score"
             value={threshold}
             onChange={(v) => setThreshold(v ?? 0.5)}
-            showFixedNote
           />
         </div>
         <div className="mt-2 flex flex-wrap items-end gap-3">
@@ -231,11 +231,11 @@ export function PresidioPanel({ status, canManage = false, entityActions = {} }:
             <label key={e} className="flex items-center gap-1 text-xs text-(--cui-color-text-default)">
               <input
                 type="checkbox"
-                aria-label={e}
+                aria-label={entityDisplayName(e)}
                 checked={Boolean(entityFilter[e])}
                 onChange={(ev) => setEntityFilter((prev) => ({ ...prev, [e]: ev.target.checked }))}
               />
-              {e}
+              {entityDisplayName(e)}
             </label>
           ))}
         </fieldset>
@@ -277,7 +277,7 @@ export function PresidioPanel({ status, canManage = false, entityActions = {} }:
                       const decision = vernDecision(f);
                       return (
                         <tr key={`${f.entityType}-${f.startUtf16}-${i}`} className="border-t border-(--cui-color-stroke-default)">
-                          <td className="px-3 py-2">{f.entityType}</td>
+                          <td className="px-3 py-2">{entityDisplayName(f.entityType)}</td>
                           <td className="px-3 py-2">{Math.round(f.score * 100)}%</td>
                           <td className="px-3 py-2 font-mono text-xs">
                             {f.startUtf16}–{f.endUtf16}

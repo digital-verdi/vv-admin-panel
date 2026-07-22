@@ -112,6 +112,8 @@ export interface PresidioTestResult {
 export interface VardeVern {
   policyVersion: number;
   defaultAction: VardeVernAction;
+  /** Effective global PII / Varde Vern activation from the proxy GET (undefined when an older proxy has not sent it yet). */
+  piiEnabled?: boolean;
   /** False when the STORED policy failed validation — the safe synthesized default is reflected. */
   policyValid: boolean;
   rolloutValid: boolean;

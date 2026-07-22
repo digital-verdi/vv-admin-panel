@@ -1,4 +1,4 @@
-import { PRESIDIO_SCORE_LABEL, PRESIDIO_SCORE_INTRO } from './operations';
+import { PRESIDIO_SCORE_TEST_LABEL, PRESIDIO_SCORE_TEST_INTRO } from './operations';
 import { NumberField } from '@/components/configuration/fields';
 
 export interface PresidioScoreFieldProps {
@@ -10,9 +10,9 @@ export interface PresidioScoreFieldProps {
 }
 
 /**
- * The "Minimum score" control for the native test studio. The value is a COARSE cutoff on a raw
- * Presidio score — the single consolidated intro line makes explicit that it is a technical value,
- * not a calibrated probability, and that today's fixed spaCy 0.85 makes the threshold binary.
+ * The transient "Test score filter" for the native test studio. It scopes THIS test run only — a
+ * COARSE cutoff on a raw Presidio score, a technical value rather than a calibrated probability — and is
+ * evaluated separately from the saved per-entity policy thresholds.
  */
 export function PresidioScoreField({
   id,
@@ -24,7 +24,7 @@ export function PresidioScoreField({
   return (
     <div className="flex max-w-md flex-col gap-1">
       <label htmlFor={id} className="text-xs font-medium text-(--cui-color-text-default)">
-        {PRESIDIO_SCORE_LABEL}
+        {PRESIDIO_SCORE_TEST_LABEL}
       </label>
       <NumberField
         id={id}
@@ -34,9 +34,9 @@ export function PresidioScoreField({
         max={1}
         step={0.05}
         disabled={disabled}
-        aria-label={ariaLabel ?? PRESIDIO_SCORE_LABEL}
+        aria-label={ariaLabel ?? PRESIDIO_SCORE_TEST_LABEL}
       />
-      <p className="text-xs text-(--cui-color-text-muted)">{PRESIDIO_SCORE_INTRO}</p>
+      <p className="text-xs text-(--cui-color-text-muted)">{PRESIDIO_SCORE_TEST_INTRO}</p>
     </div>
   );
 }

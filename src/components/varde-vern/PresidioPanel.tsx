@@ -24,8 +24,9 @@ const LANGUAGE_OPTIONS: t.SelectOption[] = [
 ];
 
 // The semantic types Varde requests from Presidio (regex is authoritative for structured types). Used
-// for the test-studio entity filter.
-const REQUESTABLE_ENTITIES = ['PERSON', 'LOCATION', 'ORG'] as const;
+// for the test-studio entity filter — these are Presidio's OWN request codes (ORGANIZATION, not the Varde
+// 'ORG' code), so the filter reaches the analyzer verbatim. Findings come back mapped to Varde codes.
+const REQUESTABLE_ENTITIES = ['PERSON', 'LOCATION', 'ORGANIZATION'] as const;
 
 // A SYNTHETIC starter sample (no real person). The admin can edit it; a warning discourages real PII.
 const SAMPLE_TEXT = 'Ola Nordmann bor i Oslo og jobber i Nordre Skogtjenester.';
@@ -64,9 +65,13 @@ export interface PresidioPanelProps {
   /** MANAGE_CONFIGS — analyze + refresh call the privileged proxy admin API, so they are disabled without
    *  it (server-side is the real gate; the client stays consistent). Defaults to false (least privilege). */
   canManage?: boolean;
-  /** Effective policy action per entity type — drives the test studio's "what Varde Vern would enforce"
+  /** SAVED per-entity policy action — drives the test studio's "what Varde Vern would enforce"
    *  decision level (the third of the three levels the plan requires). */
   entityActions?: Record<string, t.VardeVernAction>;
+  /** SAVED Presidio rollout phase, threaded so the test-studio column mirrors the real pipeline. */
+  presidioPhase?: t.VardeVernRolloutPhase;
+  /** SAVED Presidio engine status, threaded so the test-studio column mirrors the real pipeline. */
+  presidioStatus?: t.VardeVernEngineStatus;
 }
 
 /**
@@ -74,7 +79,13 @@ export interface PresidioPanelProps {
  * plus the native test studio. The studio calls ONLY the proxy admin API, marks the browser's own input
  * from returned offsets (no matched substring crosses the API), persists nothing, and never calls an LLM.
  */
-export function PresidioPanel({ status, canManage = false, entityActions = {} }: PresidioPanelProps) {
+export function PresidioPanel({
+  status,
+  canManage = false,
+  entityActions = {},
+  presidioPhase = 'off',
+  presidioStatus = 'disabled',
+}: PresidioPanelProps) {
   const queryClient = useQueryClient();
   const [text, setText] = useState(SAMPLE_TEXT);
   const [language, setLanguage] = useState(status?.language === 'en' ? 'en' : 'nb');
@@ -117,7 +128,7 @@ export function PresidioPanel({ status, canManage = false, entityActions = {} }:
   if (!status?.configured) {
     return (
       <p className="text-sm text-(--cui-color-text-muted)">
-        No semantic engine is active yet — Presidio joins Varde Vern once the transport is configured.
+        Presidio is not connected. Connect the analyzer before semantic detection can run.
       </p>
     );
   }
@@ -125,11 +136,13 @@ export function PresidioPanel({ status, canManage = false, entityActions = {} }:
   const live = status.state ?? 'unknown';
   // The client-side "what Varde Vern would enforce" decision for a finding (server-side always governs).
   const vernDecision = (f: t.PresidioFinding): { tone: Tone; label: string } => {
+    if (presidioStatus === 'disabled' || presidioPhase === 'off') return { tone: 'inactive', label: 'ignore' };
+    if (!f.abovePolicyThreshold) return { tone: 'inactive', label: 'ignore' };
     const action = entityActions[f.entityType];
-    if ((action === 'enforce' || action === 'block') && f.abovePolicyThreshold) {
-      return { tone: 'protective', label: action === 'block' ? 'block' : 'mask' };
-    }
-    return { tone: 'inactive', label: 'observe' };
+    if (action === 'allow') return { tone: 'inactive', label: 'ignore' };
+    if (action === 'shadow') return { tone: 'measuring', label: 'observe' };
+    if (presidioPhase !== 'enforce') return { tone: 'measuring', label: 'observe' };
+    return action === 'block' ? { tone: 'protective', label: 'block' } : { tone: 'protective', label: 'mask' };
   };
 
   return (
@@ -146,6 +159,7 @@ export function PresidioPanel({ status, canManage = false, entityActions = {} }:
               type="button"
               onClick={() => refresh.mutate()}
               disabled={refresh.isPending}
+              title="Rechecks analyzer health and supported entity types."
               className="inline-flex items-center gap-1 rounded-md border border-(--cui-color-stroke-default) px-2 py-1 text-xs disabled:opacity-50"
             >
               <Icon name="refresh" size="sm" /> Refresh
@@ -226,7 +240,7 @@ export function PresidioPanel({ status, canManage = false, entityActions = {} }:
         </div>
         {/* F12f: entity filter — restrict which semantic types Presidio is asked for. */}
         <fieldset className="mt-3 flex flex-wrap items-center gap-3">
-          <legend className="mr-1 text-xs text-(--cui-color-text-muted)">Entities (all if none):</legend>
+          <legend className="mr-1 text-xs text-(--cui-color-text-muted)">Entities (none = all):</legend>
           {REQUESTABLE_ENTITIES.map((e) => (
             <label key={e} className="flex items-center gap-1 text-xs text-(--cui-color-text-default)">
               <input
@@ -241,7 +255,7 @@ export function PresidioPanel({ status, canManage = false, entityActions = {} }:
         </fieldset>
         {!canManage && (
           <p className="mt-2 text-xs text-(--cui-color-text-muted)">
-            Read-only: analyzing requires the manage-configs capability.
+            Read-only: testing and refresh require Manage configs.
           </p>
         )}
 
@@ -249,9 +263,9 @@ export function PresidioPanel({ status, canManage = false, entityActions = {} }:
           <div className="mt-3 flex flex-col gap-2">
             <SpanMarker text={analyzedText} spans={spans} />
             <p className="text-xs text-(--cui-color-text-muted)">
-              Three levels: <strong>Presidio</strong> found it · <strong>Over threshold</strong> = above the
-              policy minConfidence · <strong>Varde Vern</strong> = what would actually be enforced (server
-              governs).
+              <strong>Presidio</strong> = detected · <strong>Policy score</strong> = passes the saved
+              threshold · <strong>Varde Vern</strong> = ignore, observe, mask or block under the saved
+              policy and rollout.
             </p>
             <div className="overflow-x-auto rounded-lg border border-(--cui-color-stroke-default)">
               <table className="w-full text-left text-sm">
@@ -261,7 +275,7 @@ export function PresidioPanel({ status, canManage = false, entityActions = {} }:
                     <th className="px-3 py-2">Score</th>
                     <th className="px-3 py-2">Offsets (UTF-16)</th>
                     <th className="px-3 py-2">Presidio</th>
-                    <th className="px-3 py-2">Over threshold</th>
+                    <th className="px-3 py-2">Policy score</th>
                     <th className="px-3 py-2">Varde Vern</th>
                   </tr>
                 </thead>
@@ -287,7 +301,7 @@ export function PresidioPanel({ status, canManage = false, entityActions = {} }:
                           </td>
                           <td className="px-3 py-2">
                             <Chip tone={f.abovePolicyThreshold ? 'protective' : 'inactive'}>
-                              {f.abovePolicyThreshold ? 'yes' : 'below'}
+                              {f.abovePolicyThreshold ? 'pass' : 'below'}
                             </Chip>
                           </td>
                           <td className="px-3 py-2">

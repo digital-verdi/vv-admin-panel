@@ -1,10 +1,20 @@
 import type * as t from '@/types';
 
-/** The minimum-score label + the ONE consolidated intro (shared by the integrated-entities table and the
- *  test studio). It is a COARSE cutoff on a raw Presidio score — never a calibrated probability. */
-export const PRESIDIO_SCORE_LABEL = 'Minimum score';
-export const PRESIDIO_SCORE_INTRO =
-  "Findings below an entity's minimum score are ignored. The score is a technical value from Presidio — not a calibrated probability; the current spaCy recognizer returns a fixed 0.85 for semantic entities, so values above 0.85 filter findings out.";
+/** Minimum-score help copy. Two distinct audiences now: the SAVED per-entity policy threshold (the
+ *  dynamic-score policy intro, which names the live fixed spaCy score) and the TRANSIENT test-studio
+ *  filter. Both describe a COARSE cutoff on a raw Presidio score — never a calibrated probability. */
+export const PRESIDIO_SCORE_TEST_LABEL = 'Test score filter';
+export const PRESIDIO_SCORE_TEST_INTRO =
+  'Filters this test only. Saved entity thresholds are evaluated separately.';
+
+/** Intro for the SAVED per-entity minimum-score policy. Names the live fixed spaCy score when the backend
+ *  exposes it, so the cutoff reads concretely; omits the number gracefully when it is not available. */
+export function presidioScorePolicyIntro(fixedScore?: number): string {
+  if (typeof fixedScore === 'number') {
+    return `Findings below this value are ignored. It is a technical score, not a probability; spaCy currently returns ${fixedScore}, so higher values filter them out.`;
+  }
+  return 'Findings below this value are ignored. It is a technical score, not a probability; the current spaCy recognizer returns a fixed score, so higher values filter them out.';
+}
 
 const ENTITY_DISPLAY_NAMES: Record<string, string> = {
   PERSON: 'Person',

@@ -519,7 +519,7 @@ export function VardeVernPage() {
                   <strong className="font-medium text-(--cui-color-text-default)">Optional</strong> lets the
                   request proceed to the LLM provider even if Presidio is unavailable.{' '}
                   <strong className="font-medium text-(--cui-color-text-default)">Required</strong> blocks the
-                  request entirely. (Presidio is automatically Required if any entity is marked as such).
+                  request entirely, if the Presidio is unavailable.
                 </p>
               </div>
               <div>

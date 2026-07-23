@@ -320,11 +320,14 @@ describe('VardeVernPage — table redesign + English-only UI', () => {
     expect(within(engine).getByText('Presidio requirement')).toBeInTheDocument();
     expect(within(engine).getByText('Presidio rollout mode')).toBeInTheDocument();
     expect(within(engine).getByText(/Controls how connection failures are handled/)).toBeInTheDocument();
-    expect(within(engine).getByText(/blocks the request entirely/)).toBeInTheDocument();
+    expect(
+      within(engine).getByText(/blocks the request entirely, if the Presidio is unavailable/),
+    ).toBeInTheDocument();
     expect(within(engine).getByText(/Controls how the engine applies findings/)).toBeInTheDocument();
     expect(within(engine).getByText(/Required cannot be combined with Off/)).toBeInTheDocument();
-    // The old ambiguous copy is fully gone.
+    // The old ambiguous copy AND the internal-jargon inheritance sentence ("…if any entity…") are gone.
     expect(within(engine).queryByText(/Off ignores, Shadow observes/)).toBeNull();
+    expect(within(engine).queryByText(/automatically Required if any entity/)).toBeNull();
   });
 
   it('seeds semantic entities to the backend shadow default (no hardcoded enforce fallback)', async () => {

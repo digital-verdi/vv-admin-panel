@@ -1,6 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import type * as t from '@/types';
-import { groupEntitiesByEngine, entityDisplayName, phaseTone, actionTone, presidioScorePolicyIntro } from './operations';
+import {
+  groupEntitiesByEngine,
+  entityDisplayName,
+  phaseTone,
+  actionTone,
+  presidioScorePolicyIntro,
+  effectiveDisposition,
+  dispositionDisplay,
+} from './operations';
 
 const entity = (over: Partial<t.VardeVernEntity>): t.VardeVernEntity => ({
   entityType: 'X',
@@ -78,5 +86,40 @@ describe('tones', () => {
     expect(actionTone('enforce')).toBe('protective');
     expect(actionTone('shadow')).toBe('measuring');
     expect(actionTone('allow')).toBe('inactive');
+  });
+});
+
+// The full disposition truth table, pinned to the proxy's authoritative disposition(action, phase)
+// (vv-llm-proxy pii/vern-pipeline.ts). If the proxy logic changes, this must change in lockstep.
+describe('effectiveDisposition (mirror of proxy disposition())', () => {
+  it('off/disabled phase ignores every action (the global ceiling wins)', () => {
+    for (const phase of ['off', 'disabled'] as const) {
+      for (const action of ['allow', 'shadow', 'enforce', 'block'] as const) {
+        expect(effectiveDisposition(action, phase)).toBe('ignore');
+      }
+    }
+  });
+
+  it('shadow phase is a ceiling: allow→ignore, everything else observes (enforce/block downgraded)', () => {
+    expect(effectiveDisposition('allow', 'shadow')).toBe('ignore');
+    expect(effectiveDisposition('shadow', 'shadow')).toBe('shadow');
+    expect(effectiveDisposition('enforce', 'shadow')).toBe('shadow');
+    expect(effectiveDisposition('block', 'shadow')).toBe('shadow');
+  });
+
+  it('enforce phase applies each action fully', () => {
+    expect(effectiveDisposition('allow', 'enforce')).toBe('ignore');
+    expect(effectiveDisposition('shadow', 'enforce')).toBe('shadow');
+    expect(effectiveDisposition('enforce', 'enforce')).toBe('enforce');
+    expect(effectiveDisposition('block', 'enforce')).toBe('block');
+  });
+});
+
+describe('dispositionDisplay', () => {
+  it('maps each disposition to its outcome label + tone', () => {
+    expect(dispositionDisplay('ignore')).toEqual({ label: 'Ignored', tone: 'inactive' });
+    expect(dispositionDisplay('shadow')).toEqual({ label: 'Observe', tone: 'measuring' });
+    expect(dispositionDisplay('enforce')).toEqual({ label: 'Mask', tone: 'protective' });
+    expect(dispositionDisplay('block')).toEqual({ label: 'Reject', tone: 'protective' });
   });
 });

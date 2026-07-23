@@ -98,3 +98,32 @@ export function actionTone(action: t.VardeVernAction): Tone {
   if (action === 'shadow') return 'measuring';
   return 'inactive';
 }
+
+/** The effective runtime OUTCOME of one finding once the engine phase gates the entity action. */
+export type VernDisposition = 'ignore' | 'shadow' | 'enforce' | 'block';
+
+/**
+ * Mirror of the proxy's authoritative `disposition(action, phase)` (vv-llm-proxy `pii/vern-pipeline.ts`):
+ * the global Presidio rollout phase is a strict CEILING over the per-entity action — the most restrictive
+ * setting wins. `phase` is the engine's effective phase (`disabled` when it has no rollout entry or is
+ * switched off ⇒ the finding is ignored). Kept in lockstep with the proxy; the full truth table is pinned in
+ * `operations.test.ts`.
+ */
+export function effectiveDisposition(
+  action: t.VardeVernAction,
+  phase: t.VardeVernRolloutPhase | 'disabled',
+): VernDisposition {
+  if (phase === 'disabled' || phase === 'off') return 'ignore';
+  if (action === 'allow') return 'ignore';
+  if (action === 'shadow') return 'shadow';
+  if (phase !== 'enforce') return 'shadow';
+  return action === 'block' ? 'block' : 'enforce';
+}
+
+/** Presentation for an effective disposition — the outcome label + tone shown in the Effective column. */
+export function dispositionDisplay(disposition: VernDisposition): { label: string; tone: Tone } {
+  if (disposition === 'enforce') return { label: 'Mask', tone: 'protective' };
+  if (disposition === 'block') return { label: 'Reject', tone: 'protective' };
+  if (disposition === 'shadow') return { label: 'Observe', tone: 'measuring' };
+  return { label: 'Ignored', tone: 'inactive' };
+}

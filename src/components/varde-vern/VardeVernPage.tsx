@@ -8,6 +8,8 @@ import {
   groupEntitiesByEngine,
   reportedNotIntegrated,
   presidioScorePolicyIntro,
+  effectiveDisposition,
+  dispositionDisplay,
   entityDisplayName,
   greenLanguagesFor,
   phaseTone,
@@ -224,6 +226,13 @@ export function VardeVernPage() {
   // the UI blocks an invalid Save before the backend (last barrier) would reject it.
   const presidioEngine = rollout.find((e) => e.engineId === 'presidio');
   const presidioPhaseOff = presidioEngine?.rolloutPhase === 'off';
+  // The global Presidio phase — a strict CEILING over each entity's action (proxy `disposition()`). Mirrors
+  // the runtime `phaseOf`: `disabled` when Presidio has no rollout entry or is switched off, so every semantic
+  // outcome collapses to Ignored. Derived from the LIVE edits so the Effective column previews unsaved changes.
+  const presidioPhase: t.VardeVernRolloutPhase | 'disabled' =
+    !presidioEngine || presidioEngine.status === 'disabled'
+      ? 'disabled'
+      : presidioEngine.rolloutPhase;
   const presidioRequired =
     presidioEngine?.status === 'required' ||
     Object.values(policy.entities).some((e) => e.requiredEngines.includes('presidio'));
@@ -302,6 +311,7 @@ export function VardeVernPage() {
     const canEnforce = green.length > 0;
     const name = entityDisplayName(entity.entityType);
     const detection = entry.requiredEngines.includes('presidio') ? 'required' : 'optional';
+    const effective = dispositionDisplay(effectiveDisposition(entry.action, presidioPhase));
     const setEnforcement = (action: t.VardeVernAction) =>
       setEntity(
         entity.entityType,
@@ -364,6 +374,9 @@ export function VardeVernPage() {
               placeholder={String(defaultMinScore)}
             />
           </div>
+        </td>
+        <td className="px-4 py-2.5 align-top" data-testid={`effective-${entity.entityType}`}>
+          <Badge tone={effective.tone}>{effective.label}</Badge>
         </td>
       </tr>
     );
@@ -678,6 +691,10 @@ export function VardeVernPage() {
                           data.presidio?.semanticScoreFixed,
                           data.presidio?.defaultMinConfidence,
                         )}
+                      />
+                      <ColumnHeader
+                        label="Effective outcome"
+                        tooltip="The actual outcome for this entity — the global Presidio rollout mode caps the Enforcement Mode (most restrictive wins). Ignored = no change; Observe = logged only (shadow); Mask = replaced with a token; Reject = the request is blocked."
                       />
                     </tr>
                   </thead>

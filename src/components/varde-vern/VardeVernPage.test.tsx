@@ -129,10 +129,12 @@ vi.mock('@/components/configuration/fields', () => ({
     value: number | undefined;
     onChange: (v: number | undefined) => void;
     'aria-label'?: string;
+    placeholder?: string;
   }) => (
     <input
       type="number"
       aria-label={p['aria-label']}
+      placeholder={p.placeholder}
       value={p.value ?? ''}
       onChange={(e) => p.onChange(e.target.value === '' ? undefined : Number(e.target.value))}
     />
@@ -225,12 +227,35 @@ describe('VardeVernPage — table redesign + English-only UI', () => {
     expect(within(integrated).queryByText('ORG')).toBeNull();
   });
 
-  it('the saved-policy minimum-score intro names the live fixed score and sits above the table (not per entity)', async () => {
+  it('shows the integrated help as a scannable bulleted list with the live fixed score, not a dense intro block', async () => {
     renderPage();
     const integrated = await openPresidioTab();
-    // One intro paragraph above the table (the column tooltip repeats the copy, so scope to the <p>).
-    const intro = within(integrated).getByText(/spaCy currently returns 0\.85/, { selector: 'p' });
-    expect(intro).toBeInTheDocument();
+    expect(
+      within(integrated).getByText(/Configure how Varde Vern handles specific data types/),
+    ).toBeInTheDocument();
+    // The Off / Shadow / Enforce ceiling rules render as a real <ul><li> list (three items).
+    expect(within(integrated).getAllByRole('listitem')).toHaveLength(3);
+    expect(
+      within(integrated).getByText(/All data types are ignored, regardless of their setting/),
+    ).toBeInTheDocument();
+    expect(within(integrated).getByText(/downgraded to Shadow \(observed only\)/)).toBeInTheDocument();
+    expect(within(integrated).getByText(/Each individual setting applies fully/)).toBeInTheDocument();
+    expect(
+      within(integrated).getByText(/makes the entire Presidio connection mandatory/),
+    ).toBeInTheDocument();
+    // Minimum Score line names the live fixed score (0.85, from semanticScoreFixed — not hardcoded).
+    expect(
+      within(integrated).getByText(/The current engine returns a fixed score of 0\.85/),
+    ).toBeInTheDocument();
+    // The old dense description block is gone.
+    expect(within(integrated).queryByText(/Integrated Presidio types: people, locations/)).toBeNull();
+  });
+
+  it('the Minimum Score inputs use the fixed score (0.85) as their empty-state placeholder', async () => {
+    renderPage();
+    const integrated = await openPresidioTab();
+    const score = within(integrated).getByLabelText('Person minimum score');
+    expect(score).toHaveAttribute('placeholder', '0.85');
   });
 
   it('the integrated vs reported split is derived from supportedEntities − integratedPresidioEntities', async () => {

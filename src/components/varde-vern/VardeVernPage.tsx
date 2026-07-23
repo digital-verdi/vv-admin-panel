@@ -150,6 +150,9 @@ export function VardeVernPage() {
   const { regex, semantic } = groupEntitiesByEngine(data.entities);
   const disabled = !canManage || busy;
   const analyzerLanguages = data.presidio?.languages ?? (data.presidio?.language ? [data.presidio.language] : ['nb', 'en']);
+  // The engine's fixed semantic score — surfaced as the Minimum Score help value + input placeholder (kept
+  // dynamic so it tracks the backend rather than hardcoding 0.85).
+  const semanticFixedScore = data.presidio?.semanticScoreFixed ?? 0.85;
   const notIntegrated = reportedNotIntegrated(data.presidio);
   // Backend-provided per-entity views drive the editable defaults — no hardcoded client-side fallback, so the
   // seeded shadow baseline for the semantic entities renders correctly.
@@ -312,6 +315,7 @@ export function VardeVernPage() {
               step={0.05}
               disabled={disabled}
               aria-label={`${name} minimum score`}
+              placeholder={String(semanticFixedScore)}
             />
           </div>
         </td>
@@ -525,18 +529,40 @@ export function VardeVernPage() {
             )}
           </Section>
 
-          <Section
-            title="Integrated in Varde Vern"
-            description="Integrated Presidio types: people, locations and organizations. Email, phone and structured identifiers remain with the local engine."
-          >
+          <Section title="Integrated in Varde Vern">
+            <div className="mb-4 flex flex-col gap-2 text-xs text-(--cui-color-text-muted)">
+              <p>
+                Configure how Varde Vern handles specific data types (Person, Location, and Organization). The
+                global Presidio rollout mode acts as a strict limit—the most restrictive setting always wins:
+              </p>
+              <ul className="ml-4 list-disc space-y-1">
+                <li>
+                  <strong className="font-medium text-(--cui-color-text-default)">If engine is Off:</strong> All
+                  data types are ignored, regardless of their setting.
+                </li>
+                <li>
+                  <strong className="font-medium text-(--cui-color-text-default)">If engine is Shadow:</strong>{' '}
+                  Data types set to Enforce are downgraded to Shadow (observed only).
+                </li>
+                <li>
+                  <strong className="font-medium text-(--cui-color-text-default)">If engine is Enforce:</strong>{' '}
+                  Each individual setting applies fully.
+                </li>
+              </ul>
+              <p>
+                Setting any row to{' '}
+                <strong className="font-medium text-(--cui-color-text-default)">Required</strong> makes the entire
+                Presidio connection mandatory, blocking the request if it fails.
+              </p>
+              <p>
+                <strong className="font-medium text-(--cui-color-text-default)">Minimum Score:</strong> Findings
+                below this value are ignored. The current engine returns a fixed score of {semanticFixedScore}.
+              </p>
+            </div>
             {semantic.length === 0 ? (
               <p className="py-2 text-xs text-(--cui-color-text-muted)">No integrated semantic entities in the catalog.</p>
             ) : (
-              <>
-                <p className="mb-3 text-xs text-(--cui-color-text-muted)">
-                  {presidioScorePolicyIntro(data.presidio?.semanticScoreFixed)}
-                </p>
-                <div className="overflow-x-auto rounded-lg border border-(--cui-color-stroke-default)">
+              <div className="overflow-x-auto rounded-lg border border-(--cui-color-stroke-default)">
                   <table className="w-full text-left text-sm">
                     <thead>
                       <tr className="border-b border-(--cui-color-stroke-default) bg-(--cui-color-background-muted)">
@@ -555,7 +581,6 @@ export function VardeVernPage() {
                     <tbody>{semantic.map(integratedEntityRow)}</tbody>
                   </table>
                 </div>
-              </>
             )}
           </Section>
 

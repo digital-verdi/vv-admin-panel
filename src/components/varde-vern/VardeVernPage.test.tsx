@@ -43,6 +43,7 @@ const mockVern: t.VardeVern = {
     supportedEntities: ['PERSON', 'LOCATION', 'ORGANIZATION', 'DATE_TIME', 'NRP'],
     integratedPresidioEntities: ['PERSON', 'LOCATION', 'ORGANIZATION'],
     semanticScoreFixed: 0.85,
+    defaultMinConfidence: 0.5,
   },
   configRevision: 3,
   dbBacked: true,
@@ -243,19 +244,19 @@ describe('VardeVernPage — table redesign + English-only UI', () => {
     expect(
       within(integrated).getByText(/makes the entire Presidio connection mandatory/),
     ).toBeInTheDocument();
-    // Minimum Score line names the live fixed score (0.85, from semanticScoreFixed — not hardcoded).
-    expect(
-      within(integrated).getByText(/The current engine returns a fixed score of 0\.85/),
-    ).toBeInTheDocument();
+    // Minimum Score line distinguishes the empty-state DEFAULT (0.5, from defaultMinConfidence) from the
+    // fixed score spaCy RETURNS (0.85, from semanticScoreFixed) — both dynamic, not hardcoded.
+    expect(within(integrated).getByText(/Left empty it defaults to 0\.5/)).toBeInTheDocument();
+    expect(within(integrated).getByText(/fixed score of 0\.85/)).toBeInTheDocument();
     // The old dense description block is gone.
     expect(within(integrated).queryByText(/Integrated Presidio types: people, locations/)).toBeNull();
   });
 
-  it('the Minimum Score inputs use the fixed score (0.85) as their empty-state placeholder', async () => {
+  it('the Minimum Score inputs use the default threshold (0.5) as their empty-state placeholder, not the fixed score', async () => {
     renderPage();
     const integrated = await openPresidioTab();
     const score = within(integrated).getByLabelText('Person minimum score');
-    expect(score).toHaveAttribute('placeholder', '0.85');
+    expect(score).toHaveAttribute('placeholder', '0.5');
   });
 
   it('the integrated vs reported split is derived from supportedEntities − integratedPresidioEntities', async () => {

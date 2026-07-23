@@ -50,9 +50,16 @@ describe('presidioScorePolicyIntro', () => {
     const intro = presidioScorePolicyIntro(0.85);
     expect(intro).toContain('0.85');
     expect(intro).toMatch(/technical score/i);
+    expect(intro).not.toMatch(/defaults to/i);
   });
 
-  it('omits any number when the fixed score is unavailable', () => {
+  it('names BOTH the empty-state default and the fixed score when both are exposed', () => {
+    const intro = presidioScorePolicyIntro(0.85, 0.5);
+    expect(intro).toContain('0.85');
+    expect(intro).toMatch(/Empty defaults to 0\.5/);
+  });
+
+  it('omits any number when neither score is available', () => {
     const intro = presidioScorePolicyIntro(undefined);
     expect(intro).not.toMatch(/[0-9]/);
     expect(intro).not.toContain('0.85');

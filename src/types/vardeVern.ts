@@ -92,6 +92,10 @@ export interface PresidioStatus {
   /** The fixed score the current spaCy NER returns → the panel presents Minimum Presidio-score as a coarse
    *  cutoff, not a calibrated probability. */
   semanticScoreFixed?: number;
+  /** The coarse default score threshold applied when an entity's Minimum Score is left empty (the proxy's
+   *  DEFAULT_PRESIDIO_CONFIDENCE) — distinct from the returned fixed score above. Drives the empty-state
+   *  placeholder so it shows the real default (0.5), not the returned score. */
+  defaultMinConfidence?: number;
   /** The NLP engine backing semantic detection (e.g. 'spaCy (SpacyRecognizer)'), derived from the score model. */
   nlpEngine?: string;
   /** The local (non-Presidio) PII engine that handles structured identifiers (e.g. 'Regex, Checksums …'). */

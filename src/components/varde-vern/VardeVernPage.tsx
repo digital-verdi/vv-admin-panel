@@ -150,9 +150,13 @@ export function VardeVernPage() {
   const { regex, semantic } = groupEntitiesByEngine(data.entities);
   const disabled = !canManage || busy;
   const analyzerLanguages = data.presidio?.languages ?? (data.presidio?.language ? [data.presidio.language] : ['nb', 'en']);
-  // The engine's fixed semantic score — surfaced as the Minimum Score help value + input placeholder (kept
-  // dynamic so it tracks the backend rather than hardcoding 0.85).
+  // The engine's fixed semantic score (the score spaCy ASSIGNS to a finding) — named in the Minimum Score
+  // help text. Kept dynamic so it tracks the backend rather than hardcoding 0.85.
   const semanticFixedScore = data.presidio?.semanticScoreFixed ?? 0.85;
+  // The coarse default THRESHOLD applied when a Minimum Score is left empty (proxy DEFAULT_PRESIDIO_CONFIDENCE
+  // = 0.5) — distinct from the fixed score above. Drives the empty-state placeholder so it shows the real
+  // default, not the returned score.
+  const defaultMinScore = data.presidio?.defaultMinConfidence ?? 0.5;
   const notIntegrated = reportedNotIntegrated(data.presidio);
   // Backend-provided per-entity views drive the editable defaults — no hardcoded client-side fallback, so the
   // seeded shadow baseline for the semantic entities renders correctly.
@@ -315,7 +319,7 @@ export function VardeVernPage() {
               step={0.05}
               disabled={disabled}
               aria-label={`${name} minimum score`}
-              placeholder={String(semanticFixedScore)}
+              placeholder={String(defaultMinScore)}
             />
           </div>
         </td>
@@ -556,7 +560,9 @@ export function VardeVernPage() {
               </p>
               <p>
                 <strong className="font-medium text-(--cui-color-text-default)">Minimum Score:</strong> Findings
-                below this value are ignored. The current engine returns a fixed score of {semanticFixedScore}.
+                below this value are ignored. Left empty it defaults to {defaultMinScore}; the current engine
+                returns a fixed score of {semanticFixedScore}, so values above {semanticFixedScore} filter
+                findings out.
               </p>
             </div>
             {semantic.length === 0 ? (
@@ -574,7 +580,7 @@ export function VardeVernPage() {
                         <ColumnHeader label="Enforcement Mode" />
                         <ColumnHeader
                           label="Minimum Score"
-                          tooltip={presidioScorePolicyIntro(data.presidio?.semanticScoreFixed)}
+                          tooltip={presidioScorePolicyIntro(data.presidio?.semanticScoreFixed, data.presidio?.defaultMinConfidence)}
                         />
                       </tr>
                     </thead>

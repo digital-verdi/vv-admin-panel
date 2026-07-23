@@ -50,6 +50,13 @@ const mockVern: t.VardeVern = {
 
 let queryValue: t.VardeVern = mockVern;
 let canManage = true;
+// Records the props the page threads into PresidioPanel, so the page→panel wiring is assertable via the mock.
+let capturedPanelProps: {
+  canManage?: boolean;
+  presidioPhase?: t.VardeVernRolloutPhase;
+  presidioStatus?: t.VardeVernEngineStatus;
+  entityActions?: Record<string, t.VardeVernAction>;
+} = {};
 const saveFn = vi.fn().mockResolvedValue({ status: 'ok', configRevision: 4 });
 vi.mock('@/server', () => ({
   vardeVernQueryOptions: { queryKey: ['varde-vern'], queryFn: () => Promise.resolve(queryValue) },
@@ -72,13 +79,34 @@ vi.mock('@clickhouse/click-ui', () => {
     <button type="button" onClick={() => onChange?.(value)}>{children}</button>
   );
   Tabs.Content = () => null;
-  return { Icon: ({ name }: { name: string }) => <span data-icon={name} />, Tabs };
+  // click-ui Tooltip: the trigger keeps its accessible name (aria-label); the content renders its text with
+  // role="tooltip" so the help copy is assertable without hovering (real hover behavior is click-ui's own).
+  const Tooltip = ({ children }: { children: React.ReactNode }) => <>{children}</>;
+  Tooltip.Trigger = ({ children, 'aria-label': ariaLabel }: { children: React.ReactNode; 'aria-label'?: string }) => (
+    <button type="button" aria-label={ariaLabel}>
+      {children}
+    </button>
+  );
+  Tooltip.Content = ({ children }: { children: React.ReactNode }) => <span role="tooltip">{children}</span>;
+  return { Icon: ({ name }: { name: string }) => <span data-icon={name} />, Tabs, Tooltip };
 });
-// Isolate the page's IA from the panel internals (PresidioPanel has its own test).
+// Isolate the page's IA from the panel internals (PresidioPanel has its own test), but RECORD the props the
+// page threads in so the page→panel wiring (saved phase/status/entity actions) is assertable.
 vi.mock('./PresidioPanel', () => ({
-  PresidioPanel: (p: { canManage?: boolean }) => (
-    <div data-testid="presidio-panel" data-can-manage={String(p.canManage)} />
-  ),
+  PresidioPanel: (p: {
+    canManage?: boolean;
+    presidioPhase?: t.VardeVernRolloutPhase;
+    presidioStatus?: t.VardeVernEngineStatus;
+    entityActions?: Record<string, t.VardeVernAction>;
+  }) => {
+    capturedPanelProps = {
+      canManage: p.canManage,
+      presidioPhase: p.presidioPhase,
+      presidioStatus: p.presidioStatus,
+      entityActions: p.entityActions,
+    };
+    return <div data-testid="presidio-panel" data-can-manage={String(p.canManage)} />;
+  },
 }));
 vi.mock('@/components/shared', () => ({
   EmptyState: ({ message }: { message: string }) => <div>{message}</div>,
@@ -101,10 +129,12 @@ vi.mock('@/components/configuration/fields', () => ({
     value: number | undefined;
     onChange: (v: number | undefined) => void;
     'aria-label'?: string;
+    placeholder?: string;
   }) => (
     <input
       type="number"
       aria-label={p['aria-label']}
+      placeholder={p.placeholder}
       value={p.value ?? ''}
       onChange={(e) => p.onChange(e.target.value === '' ? undefined : Number(e.target.value))}
     />
@@ -125,7 +155,7 @@ const goTab = (name: string) => fireEvent.click(screen.getByRole('button', { nam
 const openPresidioTab = async () => {
   await screen.findByRole('region', { name: 'Entity matrix' });
   goTab('Presidio Analyzer');
-  return screen.findByRole('region', { name: 'Active in Varde Vern' });
+  return screen.findByRole('region', { name: 'Integrated in Varde Vern' });
 };
 
 const savedPolicy = (): t.VardeVernPolicyInput => {
@@ -137,6 +167,7 @@ describe('VardeVernPage — table redesign + English-only UI', () => {
   beforeEach(() => {
     queryValue = mockVern;
     canManage = true;
+    capturedPanelProps = {};
     saveFn.mockClear();
   });
 
@@ -148,6 +179,9 @@ describe('VardeVernPage — table redesign + English-only UI', () => {
     expect(within(matrix).getByText('Person')).toBeInTheDocument();
     expect(within(matrix).getAllByText('authoritative').length).toBeGreaterThan(0);
     expect(within(matrix).getAllByText('supplementary').length).toBeGreaterThan(0);
+    // The final column is "Policy action" (renamed from the old "Effective action").
+    expect(within(matrix).getByText('Policy action')).toBeInTheDocument();
+    expect(within(matrix).queryByText('Effective action')).toBeNull();
   });
 
   it('Local PII engine tab shows the regex section (checksum + enforce/block action)', async () => {
@@ -167,13 +201,23 @@ describe('VardeVernPage — table redesign + English-only UI', () => {
     expect(panel).toHaveAttribute('data-can-manage', 'true');
   });
 
-  it('renders the four table columns: Entity | Detection Policy | Enforcement Mode | Minimum Score', async () => {
+  it('renders the four table columns: Entity | Presidio requirement | Enforcement Mode | Minimum Score', async () => {
     renderPage();
     const integrated = await openPresidioTab();
     expect(within(integrated).getByRole('columnheader', { name: 'Entity' })).toBeInTheDocument();
-    expect(within(integrated).getByRole('columnheader', { name: 'Detection Policy' })).toBeInTheDocument();
+    // "Presidio requirement" (renamed from "Detection Policy") and "Minimum Score" carry help tooltips, so the
+    // header's accessible name also includes the trigger/tooltip copy — match on the label substring.
+    expect(within(integrated).getByRole('columnheader', { name: /Presidio requirement/ })).toBeInTheDocument();
     expect(within(integrated).getByRole('columnheader', { name: 'Enforcement Mode' })).toBeInTheDocument();
-    expect(within(integrated).getByRole('columnheader', { name: 'Minimum Score' })).toBeInTheDocument();
+    expect(within(integrated).getByRole('columnheader', { name: /Minimum Score/ })).toBeInTheDocument();
+    expect(within(integrated).queryByRole('columnheader', { name: /Detection Policy/ })).toBeNull();
+    // The two tooltip-bearing headers expose the help trigger via the new "More information about …" aria-label.
+    expect(
+      within(integrated).getByRole('button', { name: 'More information about Presidio requirement' }),
+    ).toBeInTheDocument();
+    expect(
+      within(integrated).getByRole('button', { name: 'More information about Minimum Score' }),
+    ).toBeInTheDocument();
     // Title-case display names — never the ALL-CAPS codes — in the Entity column.
     expect(within(integrated).getByText('Person')).toBeInTheDocument();
     expect(within(integrated).getByText('Location')).toBeInTheDocument();
@@ -183,10 +227,35 @@ describe('VardeVernPage — table redesign + English-only UI', () => {
     expect(within(integrated).queryByText('ORG')).toBeNull();
   });
 
-  it('the shared minimum-score intro renders ONCE above the table (not per entity)', async () => {
+  it('shows the integrated help as a scannable bulleted list with the live fixed score, not a dense intro block', async () => {
     renderPage();
-    await openPresidioTab();
-    expect(screen.getAllByText(/Findings below an entity's minimum score are ignored/)).toHaveLength(1);
+    const integrated = await openPresidioTab();
+    expect(
+      within(integrated).getByText(/Configure how Varde Vern handles specific data types/),
+    ).toBeInTheDocument();
+    // The Off / Shadow / Enforce ceiling rules render as a real <ul><li> list (three items).
+    expect(within(integrated).getAllByRole('listitem')).toHaveLength(3);
+    expect(
+      within(integrated).getByText(/All data types are ignored, regardless of their setting/),
+    ).toBeInTheDocument();
+    expect(within(integrated).getByText(/downgraded to Shadow \(observed only\)/)).toBeInTheDocument();
+    expect(within(integrated).getByText(/Each individual setting applies fully/)).toBeInTheDocument();
+    expect(
+      within(integrated).getByText(/makes the entire Presidio connection mandatory/),
+    ).toBeInTheDocument();
+    // Minimum Score line names the live fixed score (0.85, from semanticScoreFixed — not hardcoded).
+    expect(
+      within(integrated).getByText(/The current engine returns a fixed score of 0\.85/),
+    ).toBeInTheDocument();
+    // The old dense description block is gone.
+    expect(within(integrated).queryByText(/Integrated Presidio types: people, locations/)).toBeNull();
+  });
+
+  it('the Minimum Score inputs use the fixed score (0.85) as their empty-state placeholder', async () => {
+    renderPage();
+    const integrated = await openPresidioTab();
+    const score = within(integrated).getByLabelText('Person minimum score');
+    expect(score).toHaveAttribute('placeholder', '0.85');
   });
 
   it('the integrated vs reported split is derived from supportedEntities − integratedPresidioEntities', async () => {
@@ -195,7 +264,7 @@ describe('VardeVernPage — table redesign + English-only UI', () => {
     expect(within(integrated).getByText('Person')).toBeInTheDocument();
     expect(within(integrated).getByText('Location')).toBeInTheDocument();
     expect(within(integrated).getByText('Organization')).toBeInTheDocument();
-    const reported = screen.getByRole('region', { name: 'Reported by Presidio, not integrated' });
+    const reported = screen.getByRole('region', { name: 'Supported by Presidio, not integrated' });
     // supportedEntities − integratedPresidioEntities = DATE_TIME, NRP (dynamic, not hardcoded).
     expect(within(reported).getByText('DATE_TIME')).toBeInTheDocument();
     expect(within(reported).getByText('NRP')).toBeInTheDocument();
@@ -204,10 +273,10 @@ describe('VardeVernPage — table redesign + English-only UI', () => {
     expect(within(reported).queryByText('PERSON')).toBeNull();
   });
 
-  it('Detection Policy → Required round-trips as requiredEngines: ["presidio"]', async () => {
+  it('Presidio requirement → Required round-trips as requiredEngines: ["presidio"]', async () => {
     renderPage();
     const integrated = await openPresidioTab();
-    fireEvent.change(within(integrated).getByLabelText('Person detection policy'), {
+    fireEvent.change(within(integrated).getByLabelText('Person Presidio requirement'), {
       target: { value: 'required' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
@@ -248,13 +317,13 @@ describe('VardeVernPage — table redesign + English-only UI', () => {
     expect(within(locationSelect).queryByRole('option', { name: 'Enforce' })).toBeNull();
     const orgSelect = within(integrated).getByLabelText('Organization enforcement mode');
     expect(within(orgSelect).queryByRole('option', { name: 'Enforce' })).toBeNull();
-    expect(within(integrated).getAllByTitle('Requires a green quality gate')).toHaveLength(2);
+    expect(within(integrated).getAllByText('Enforce needs approved quality tests.')).toHaveLength(2);
   });
 
   it('the Presidio rollout status (optional/required) is editable and round-trips', async () => {
     renderPage();
     await openPresidioTab();
-    const status = await screen.findByLabelText('presidio status');
+    const status = await screen.findByLabelText('Presidio requirement');
     fireEvent.change(status, { target: { value: 'required' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(saveFn).toHaveBeenCalledTimes(1));
@@ -263,6 +332,31 @@ describe('VardeVernPage — table redesign + English-only UI', () => {
     };
     const presidio = arg.data.rollout.engines.find((e) => e.engineId === 'presidio');
     expect(presidio!.status).toBe('required');
+  });
+
+  it('renders the Presidio engine as two setting rows (label + description + control), no standalone "presidio" label', async () => {
+    renderPage();
+    await openPresidioTab();
+    const engine = screen.getByRole('region', { name: 'Presidio engine' });
+    // Two setting-row labels, each with its own description.
+    expect(within(engine).getByText('Presidio requirement')).toBeInTheDocument();
+    expect(within(engine).getByText('Presidio rollout mode')).toBeInTheDocument();
+    expect(within(engine).getByText(/Controls how connection failures are handled/)).toBeInTheDocument();
+    expect(
+      within(engine).getByText(/blocks the request entirely, if the Presidio is unavailable/),
+    ).toBeInTheDocument();
+    expect(within(engine).getByText(/Controls how the engine applies findings/)).toBeInTheDocument();
+    expect(within(engine).getByText(/Required cannot be combined with Off/)).toBeInTheDocument();
+    // Each control lives in the same section as its label + description (proximity, not a detached block).
+    expect(within(engine).getByLabelText('Presidio requirement')).toBeInTheDocument();
+    expect(within(engine).getByLabelText('Presidio rollout mode')).toBeInTheDocument();
+    // The standalone lowercase "presidio" row label and the old short inline labels are gone.
+    expect(within(engine).queryByText('presidio')).toBeNull();
+    expect(within(engine).queryByText('Requirement')).toBeNull();
+    expect(within(engine).queryByText('Rollout mode')).toBeNull();
+    // Old ambiguous copy + inheritance jargon stay gone.
+    expect(within(engine).queryByText(/Off ignores, Shadow observes/)).toBeNull();
+    expect(within(engine).queryByText(/automatically Required if any entity/)).toBeNull();
   });
 
   it('seeds semantic entities to the backend shadow default (no hardcoded enforce fallback)', async () => {
@@ -313,7 +407,7 @@ describe('VardeVernPage — table redesign + English-only UI', () => {
     queryValue = { ...mockVern, policyValid: false };
     renderPage();
     const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent(/failed validation/i);
+    expect(alert).toHaveTextContent(/Saved Varde Vern settings are invalid/i);
   });
 
   it('without MANAGE_CONFIGS the Save button is disabled', async () => {
@@ -322,5 +416,179 @@ describe('VardeVernPage — table redesign + English-only UI', () => {
     await screen.findByRole('region', { name: 'Entity matrix' });
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
     canManage = true;
+  });
+
+  it('global status badge: piiEnabled=true → "enabled"', async () => {
+    queryValue = { ...mockVern, piiEnabled: true };
+    renderPage();
+    const status = await screen.findByRole('region', { name: 'Operational status' });
+    expect(within(status).getByText('enabled')).toBeInTheDocument();
+  });
+
+  it('global status badge: piiEnabled=false → "disabled"', async () => {
+    queryValue = { ...mockVern, piiEnabled: false };
+    renderPage();
+    const status = await screen.findByRole('region', { name: 'Operational status' });
+    expect(within(status).getByText('disabled')).toBeInTheDocument();
+  });
+
+  it('global status badge: piiEnabled undefined (older proxy) → "unknown"', async () => {
+    queryValue = { ...mockVern, piiEnabled: undefined };
+    renderPage();
+    const status = await screen.findByRole('region', { name: 'Operational status' });
+    expect(within(status).getByText('unknown')).toBeInTheDocument();
+  });
+
+  it('removes Off from the Presidio phase options once Presidio is Required', async () => {
+    queryValue = {
+      ...mockVern,
+      rollout: [
+        { engineId: 'regex', status: 'required', rolloutPhase: 'enforce', enforceAllowed: true },
+        { engineId: 'presidio', status: 'required', rolloutPhase: 'shadow', enforceAllowed: false },
+      ],
+    };
+    renderPage();
+    await openPresidioTab();
+    const phaseSelect = await screen.findByLabelText('Presidio rollout mode');
+    expect(within(phaseSelect).queryByRole('option', { name: 'Off' })).toBeNull();
+    expect(within(phaseSelect).getByRole('option', { name: 'Shadow' })).toBeInTheDocument();
+  });
+
+  it('a loaded Required+Off Presidio config (engine status) surfaces the hoisted top-level alert and disables Save', async () => {
+    queryValue = {
+      ...mockVern,
+      rollout: [
+        { engineId: 'regex', status: 'required', rolloutPhase: 'enforce', enforceAllowed: true },
+        { engineId: 'presidio', status: 'required', rolloutPhase: 'off', enforceAllowed: false },
+      ],
+    };
+    renderPage();
+    // The banner is hoisted above the subtabs (rendered near Save), so it shows on the default Overview tab —
+    // no need to open the Presidio tab first.
+    await screen.findByRole('region', { name: 'Entity matrix' });
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent(/Presidio cannot be Off while it is required/i);
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    // …and it persists across tabs (outside the subtab conditional).
+    goTab('Local PII engine');
+    expect(screen.getByRole('alert')).toHaveTextContent(/Presidio cannot be Off while it is required/i);
+  });
+
+  it('a loaded Required+Off Presidio config (entity requiredEngines) surfaces the hoisted top-level alert and disables Save', async () => {
+    queryValue = {
+      ...mockVern,
+      policy: {
+        ...mockVern.policy,
+        entities: {
+          ...mockVern.policy.entities,
+          PERSON: { action: 'shadow', requiredEngines: ['presidio'], minConfidence: 0.7 },
+        },
+      },
+      rollout: [
+        { engineId: 'regex', status: 'required', rolloutPhase: 'enforce', enforceAllowed: true },
+        { engineId: 'presidio', status: 'optional', rolloutPhase: 'off', enforceAllowed: false },
+      ],
+    };
+    renderPage();
+    // Hoisted banner — assertable on the default Overview tab without navigating to Presidio.
+    await screen.findByRole('region', { name: 'Entity matrix' });
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent(/Presidio cannot be Off while it is required/i);
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+  });
+
+  it('marking the Presidio engine Required while its phase is Off auto-bumps the phase to Shadow', async () => {
+    queryValue = {
+      ...mockVern,
+      rollout: [
+        { engineId: 'regex', status: 'required', rolloutPhase: 'enforce', enforceAllowed: true },
+        { engineId: 'presidio', status: 'optional', rolloutPhase: 'off', enforceAllowed: false },
+      ],
+    };
+    renderPage();
+    await openPresidioTab();
+    fireEvent.change(await screen.findByLabelText('Presidio requirement'), { target: { value: 'required' } });
+    expect((screen.getByLabelText('Presidio rollout mode') as HTMLSelectElement).value).toBe('shadow');
+    expect(screen.queryByText(/Presidio cannot be Off while it is required/i)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Save' })).not.toBeDisabled();
+  });
+
+  it('marking an entity Required while the Presidio phase is Off auto-bumps the phase to Shadow', async () => {
+    queryValue = {
+      ...mockVern,
+      rollout: [
+        { engineId: 'regex', status: 'required', rolloutPhase: 'enforce', enforceAllowed: true },
+        { engineId: 'presidio', status: 'optional', rolloutPhase: 'off', enforceAllowed: false },
+      ],
+    };
+    renderPage();
+    const integrated = await openPresidioTab();
+    fireEvent.change(within(integrated).getByLabelText('Person Presidio requirement'), {
+      target: { value: 'required' },
+    });
+    expect((screen.getByLabelText('Presidio rollout mode') as HTMLSelectElement).value).toBe('shadow');
+    expect(screen.queryByText(/Presidio cannot be Off while it is required/i)).toBeNull();
+  });
+
+  it('a valid Presidio configuration leaves Save enabled with no required-off alert', async () => {
+    renderPage();
+    await openPresidioTab();
+    expect(screen.queryByText(/Presidio cannot be Off while it is required/i)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Save' })).not.toBeDisabled();
+  });
+
+  it('removes Off from the Presidio phase options when an ENTITY marks Presidio Required (engine status still optional)', async () => {
+    renderPage();
+    const integrated = await openPresidioTab();
+    // Engine status is 'optional' in the default mock; require Presidio via a semantic entity, not the engine.
+    fireEvent.change(within(integrated).getByLabelText('Person Presidio requirement'), {
+      target: { value: 'required' },
+    });
+    const phaseSelect = screen.getByLabelText('Presidio rollout mode');
+    expect(within(phaseSelect).queryByRole('option', { name: 'Off' })).toBeNull();
+    expect(within(phaseSelect).getByRole('option', { name: 'Shadow' })).toBeInTheDocument();
+    // The requirement came from the entity — the engine status is untouched.
+    expect((screen.getByLabelText('Presidio requirement') as HTMLSelectElement).value).toBe('optional');
+  });
+
+  it('threads the SAVED presidio phase/status + entity actions to the panel — never the local unsaved edits', async () => {
+    queryValue = {
+      ...mockVern,
+      rollout: [
+        { engineId: 'regex', status: 'required', rolloutPhase: 'enforce', enforceAllowed: true },
+        { engineId: 'presidio', status: 'optional', rolloutPhase: 'shadow', enforceAllowed: false },
+      ],
+    };
+    renderPage();
+    const integrated = await openPresidioTab();
+    // Sourced from data.rollout (saved) + data.entities[].action — not the local editable rollout/policy.
+    expect(capturedPanelProps.presidioPhase).toBe('shadow');
+    expect(capturedPanelProps.presidioStatus).toBe('optional');
+    expect(capturedPanelProps.entityActions).toMatchObject({
+      FNR: 'enforce',
+      EMAIL: 'enforce',
+      PERSON: 'shadow',
+      LOCATION: 'shadow',
+      ORG: 'shadow',
+    });
+    // Make LOCAL edits that DIFFER from the saved values; the panel must keep receiving the SAVED values.
+    fireEvent.change(screen.getByLabelText('Presidio rollout mode'), { target: { value: 'enforce' } });
+    fireEvent.change(within(integrated).getByLabelText('Person enforcement mode'), {
+      target: { value: 'enforce' },
+    });
+    expect(capturedPanelProps.presidioPhase).toBe('shadow');
+    expect(capturedPanelProps.presidioStatus).toBe('optional');
+    expect(capturedPanelProps.entityActions!.PERSON).toBe('shadow');
+  });
+
+  it('falls back to presidioPhase="off" / presidioStatus="disabled" when data.rollout has no presidio entry', async () => {
+    queryValue = {
+      ...mockVern,
+      rollout: [{ engineId: 'regex', status: 'required', rolloutPhase: 'enforce', enforceAllowed: true }],
+    };
+    renderPage();
+    await openPresidioTab();
+    expect(capturedPanelProps.presidioPhase).toBe('off');
+    expect(capturedPanelProps.presidioStatus).toBe('disabled');
   });
 });

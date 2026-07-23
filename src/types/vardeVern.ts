@@ -92,6 +92,12 @@ export interface PresidioStatus {
   /** The fixed score the current spaCy NER returns → the panel presents Minimum Presidio-score as a coarse
    *  cutoff, not a calibrated probability. */
   semanticScoreFixed?: number;
+  /** The NLP engine backing semantic detection (e.g. 'spaCy (SpacyRecognizer)'), derived from the score model. */
+  nlpEngine?: string;
+  /** The local (non-Presidio) PII engine that handles structured identifiers (e.g. 'Regex, Checksums …'). */
+  localEngine?: string;
+  /** Presidio modules present in the image but NOT active in this deployment (e.g. Transformers, Stanza). */
+  inactiveModules?: string[];
 }
 
 /** One Presidio test-studio finding. Carries only offsets/labels/scores — NEVER the matched substring
@@ -112,6 +118,8 @@ export interface PresidioTestResult {
 export interface VardeVern {
   policyVersion: number;
   defaultAction: VardeVernAction;
+  /** Effective global PII / Varde Vern activation from the proxy GET (undefined when an older proxy has not sent it yet). */
+  piiEnabled?: boolean;
   /** False when the STORED policy failed validation — the safe synthesized default is reflected. */
   policyValid: boolean;
   rolloutValid: boolean;

@@ -51,17 +51,32 @@ const CONFIGURED: t.PresidioStatus = {
   lastProbeAt: null,
   lastProbeLatencyMs: null,
   supportedEntities: ['PERSON', 'LOCATION'],
+  nlpEngine: 'spaCy (SpacyRecognizer)',
+  localEngine: 'Regex, Checksums (handles structural identifiers)',
+  inactiveModules: ['Transformers', 'Stanza', 'Pattern recognizers', 'Deny/Allow-lists'],
 };
 
 function renderPanel(
   status?: t.PresidioStatus,
-  opts: { canManage?: boolean; entityActions?: Record<string, t.VardeVernAction>; qc?: QueryClient } = {},
+  opts: {
+    canManage?: boolean;
+    entityActions?: Record<string, t.VardeVernAction>;
+    presidioStatus?: t.VardeVernEngineStatus;
+    presidioPhase?: t.VardeVernRolloutPhase;
+    qc?: QueryClient;
+  } = {},
 ) {
   const qc =
     opts.qc ?? new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <PresidioPanel status={status} canManage={opts.canManage} entityActions={opts.entityActions} />
+      <PresidioPanel
+        status={status}
+        canManage={opts.canManage}
+        entityActions={opts.entityActions}
+        presidioStatus={opts.presidioStatus}
+        presidioPhase={opts.presidioPhase}
+      />
     </QueryClientProvider>,
   );
 }
@@ -74,7 +89,7 @@ describe('PresidioPanel', () => {
 
   it('shows a placeholder when Presidio is not configured', () => {
     renderPanel(undefined);
-    expect(screen.getByText(/Presidio joins Varde Vern/i)).toBeInTheDocument();
+    expect(screen.getByText(/Presidio is not connected/i)).toBeInTheDocument();
   });
 
   it('renders read-only status (release/digest/managed/languages) but never an endpoint or token', () => {
@@ -84,6 +99,20 @@ describe('PresidioPanel', () => {
     expect(screen.getByText('managed')).toBeInTheDocument();
     expect(screen.getByText('nb, en')).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/http|X-Auth-Token|Bearer/i);
+  });
+
+  it('renders the dynamic engine capabilities (NLP engine, local PII engine, inactive modules) in the status card', () => {
+    renderPanel(CONFIGURED, { canManage: true });
+    const nlpRow = screen.getByText('NLP Engine').closest('div')!;
+    expect(within(nlpRow).getByText('spaCy (SpacyRecognizer)')).toBeInTheDocument();
+    const localRow = screen.getByText('Local PII engine').closest('div')!;
+    expect(
+      within(localRow).getByText('Regex, Checksums (handles structural identifiers)'),
+    ).toBeInTheDocument();
+    const modulesRow = screen.getByText('Inactive modules').closest('div')!;
+    expect(
+      within(modulesRow).getByText('Transformers, Stanza, Pattern recognizers, Deny/Allow-lists'),
+    ).toBeInTheDocument();
   });
 
   it('test studio: Analyze calls the admin API and renders offsets/scores + local span marking', async () => {
@@ -117,7 +146,7 @@ describe('PresidioPanel', () => {
     renderPanel(CONFIGURED, { canManage: false });
     expect(screen.getByRole('button', { name: /analyze/i })).toBeDisabled();
     expect(screen.queryByRole('button', { name: /refresh/i })).toBeNull();
-    expect(screen.getByText(/requires the manage-configs capability/i)).toBeInTheDocument();
+    expect(screen.getByText(/testing and refresh require Manage configs/i)).toBeInTheDocument();
   });
 
   it('F12f: the entity filter + threshold are sent to the admin API (display name shown, code sent)', async () => {
@@ -130,26 +159,57 @@ describe('PresidioPanel', () => {
     expect(arg.data.scoreThreshold).toBe(0.5);
   });
 
-  it('F12f: the 3-level decision shows what Varde Vern would enforce (from entityActions)', async () => {
-    renderPanel(CONFIGURED, { canManage: true, entityActions: { PERSON: 'enforce' } });
-    fireEvent.click(screen.getByRole('button', { name: /analyze/i }));
-    // found + above-threshold + would-enforce(mask). With PERSON=enforce and abovePolicyThreshold=true → "mask".
-    await waitFor(() => expect(screen.getByText('found')).toBeInTheDocument());
-    expect(screen.getByText('mask')).toBeInTheDocument();
-  });
+  // The full decision table (plan Del 6): (presidioStatus, presidioPhase, saved policy action, above saved
+  // threshold) → the Varde Vern column chip. Mirrors PresidioPanel.vernDecision EXACTLY, in evaluation order.
+  const DECISION_CASES: {
+    presidioStatus: t.VardeVernEngineStatus;
+    presidioPhase: t.VardeVernRolloutPhase;
+    action: t.VardeVernAction;
+    above: boolean;
+    expected: string;
+  }[] = [
+    { presidioStatus: 'disabled', presidioPhase: 'enforce', action: 'enforce', above: true, expected: 'ignore' },
+    { presidioStatus: 'optional', presidioPhase: 'off', action: 'enforce', above: true, expected: 'ignore' },
+    { presidioStatus: 'optional', presidioPhase: 'shadow', action: 'allow', above: true, expected: 'ignore' },
+    { presidioStatus: 'optional', presidioPhase: 'shadow', action: 'enforce', above: true, expected: 'observe' },
+    { presidioStatus: 'optional', presidioPhase: 'enforce', action: 'shadow', above: true, expected: 'observe' },
+    { presidioStatus: 'optional', presidioPhase: 'enforce', action: 'enforce', above: false, expected: 'ignore' },
+    { presidioStatus: 'optional', presidioPhase: 'enforce', action: 'enforce', above: true, expected: 'mask' },
+    { presidioStatus: 'optional', presidioPhase: 'enforce', action: 'block', above: true, expected: 'block' },
+    // presidioStatus='required' exercises the non-disabled "proceeds" branch (all other rows use disabled/optional).
+    { presidioStatus: 'required', presidioPhase: 'enforce', action: 'enforce', above: true, expected: 'mask' },
+  ];
 
-  it('F12f: an un-enforced entity shows "observe" (not enforced)', async () => {
-    renderPanel(CONFIGURED, { canManage: true, entityActions: { PERSON: 'shadow' } });
-    fireEvent.click(screen.getByRole('button', { name: /analyze/i }));
-    await waitFor(() => expect(screen.getByText('observe')).toBeInTheDocument());
-  });
+  it.each(DECISION_CASES)(
+    'decision table: status=$presidioStatus phase=$presidioPhase action=$action above=$above → $expected',
+    async ({ presidioStatus, presidioPhase, action, above, expected }) => {
+      testFn.mockResolvedValueOnce({
+        status: 'success',
+        findings: [{ entityType: 'PERSON', startUtf16: 0, endUtf16: 3, score: 0.9, abovePolicyThreshold: above }],
+      });
+      renderPanel(CONFIGURED, {
+        canManage: true,
+        entityActions: { PERSON: action },
+        presidioStatus,
+        presidioPhase,
+      });
+      fireEvent.click(screen.getByRole('button', { name: /analyze/i }));
+      const table = await screen.findByRole('table');
+      // The "Presidio" column always chips "found"; the "Varde Vern" column carries the decision label.
+      await waitFor(() => expect(within(table).getByText('found')).toBeInTheDocument());
+      expect(within(table).getByText(expected)).toBeInTheDocument();
+    },
+  );
 
-  it('the test studio shows the minimum-score field with the ONE consolidated English intro', () => {
+  it('the test studio shows the transient test-score filter (its own copy, not the saved-policy intro)', () => {
     renderPanel(CONFIGURED, { canManage: true });
-    expect(screen.getByText('Minimum score')).toBeInTheDocument();
-    expect(screen.getAllByText(/Findings below an entity's minimum score are ignored/)).toHaveLength(1);
+    expect(screen.getByText('Test score filter')).toBeInTheDocument();
+    expect(
+      screen.getAllByText('Filters this test only. Saved entity thresholds are evaluated separately.'),
+    ).toHaveLength(1);
+    // The saved-policy minimum-score copy lives on the page, never inside the test studio.
+    expect(screen.queryByText(/Findings below this value are ignored/)).toBeNull();
     expect(screen.queryByText('Minimum Presidio-score')).toBeNull();
-    expect(screen.queryByText(/ikke nødvendigvis en prosentvis sannsynlighet/)).toBeNull();
     expect(screen.queryByText(/fast score 0,85/)).toBeNull();
   });
 
@@ -160,5 +220,39 @@ describe('PresidioPanel', () => {
     const table = screen.getByRole('table');
     expect(within(table).getByText('Person')).toBeInTheDocument();
     expect(within(table).queryByText('PERSON')).toBeNull();
+  });
+
+  it('the results table has a "Policy score" column that chips "pass" for an above-threshold finding', async () => {
+    renderPanel(CONFIGURED, { canManage: true });
+    fireEvent.click(screen.getByRole('button', { name: /analyze/i }));
+    const table = await screen.findByRole('table');
+    expect(within(table).getByRole('columnheader', { name: 'Policy score' })).toBeInTheDocument();
+    await waitFor(() => expect(within(table).getByText('pass')).toBeInTheDocument());
+  });
+
+  it('the "Policy score" column chips "below" for a below-threshold finding', async () => {
+    testFn.mockResolvedValueOnce({
+      status: 'success',
+      findings: [{ entityType: 'PERSON', startUtf16: 0, endUtf16: 3, score: 0.4, abovePolicyThreshold: false }],
+    });
+    renderPanel(CONFIGURED, { canManage: true });
+    fireEvent.click(screen.getByRole('button', { name: /analyze/i }));
+    const table = await screen.findByRole('table');
+    await waitFor(() => expect(within(table).getByText('below')).toBeInTheDocument());
+    expect(within(table).queryByText('pass')).toBeNull();
+  });
+
+  it('shows the compact entity-filter legend', () => {
+    renderPanel(CONFIGURED, { canManage: true });
+    expect(screen.getByText('Entities (none = all):')).toBeInTheDocument();
+  });
+
+  it('F12f: the Organization filter sends the Presidio request code ORGANIZATION (label stays "Organization")', async () => {
+    renderPanel(CONFIGURED, { canManage: true });
+    fireEvent.click(screen.getByLabelText('Organization')); // display-name label; Presidio code sent
+    fireEvent.click(screen.getByRole('button', { name: /analyze/i }));
+    await waitFor(() => expect(testFn).toHaveBeenCalledTimes(1));
+    const arg = testFn.mock.calls[0]![0] as { data: { entities?: string[] } };
+    expect(arg.data.entities).toEqual(['ORGANIZATION']);
   });
 });

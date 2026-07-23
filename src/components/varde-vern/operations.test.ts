@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type * as t from '@/types';
-import { groupEntitiesByEngine, entityDisplayName, phaseTone, actionTone } from './operations';
+import { groupEntitiesByEngine, entityDisplayName, phaseTone, actionTone, presidioScorePolicyIntro } from './operations';
 
 const entity = (over: Partial<t.VardeVernEntity>): t.VardeVernEntity => ({
   entityType: 'X',
@@ -42,6 +42,20 @@ describe('entityDisplayName', () => {
   it('title-cases unknown codes as a fallback', () => {
     expect(entityDisplayName('DATE_TIME')).toBe('Date Time');
     expect(entityDisplayName('NRP')).toBe('Nrp');
+  });
+});
+
+describe('presidioScorePolicyIntro', () => {
+  it('names the live fixed spaCy score when the backend exposes it', () => {
+    const intro = presidioScorePolicyIntro(0.85);
+    expect(intro).toContain('0.85');
+    expect(intro).toMatch(/technical score/i);
+  });
+
+  it('omits any number when the fixed score is unavailable', () => {
+    const intro = presidioScorePolicyIntro(undefined);
+    expect(intro).not.toMatch(/[0-9]/);
+    expect(intro).not.toContain('0.85');
   });
 });
 

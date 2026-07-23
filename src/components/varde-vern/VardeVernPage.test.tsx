@@ -309,14 +309,11 @@ describe('VardeVernPage — table redesign + English-only UI', () => {
     expect(presidio!.status).toBe('required');
   });
 
-  it('labels the Presidio dropdowns and shows the two-part engine help copy', async () => {
+  it('renders the Presidio engine as two setting rows (label + description + control), no standalone "presidio" label', async () => {
     renderPage();
     await openPresidioTab();
     const engine = screen.getByRole('region', { name: 'Presidio engine' });
-    // Visible Sentence-case labels above each dropdown (DoD).
-    expect(within(engine).getByText('Requirement')).toBeInTheDocument();
-    expect(within(engine).getByText('Rollout mode')).toBeInTheDocument();
-    // Two-part, consequence-driven help copy replaces the old ambiguous single line.
+    // Two setting-row labels, each with its own description.
     expect(within(engine).getByText('Presidio requirement')).toBeInTheDocument();
     expect(within(engine).getByText('Presidio rollout mode')).toBeInTheDocument();
     expect(within(engine).getByText(/Controls how connection failures are handled/)).toBeInTheDocument();
@@ -325,7 +322,14 @@ describe('VardeVernPage — table redesign + English-only UI', () => {
     ).toBeInTheDocument();
     expect(within(engine).getByText(/Controls how the engine applies findings/)).toBeInTheDocument();
     expect(within(engine).getByText(/Required cannot be combined with Off/)).toBeInTheDocument();
-    // The old ambiguous copy AND the internal-jargon inheritance sentence ("…if any entity…") are gone.
+    // Each control lives in the same section as its label + description (proximity, not a detached block).
+    expect(within(engine).getByLabelText('Presidio requirement')).toBeInTheDocument();
+    expect(within(engine).getByLabelText('Presidio rollout mode')).toBeInTheDocument();
+    // The standalone lowercase "presidio" row label and the old short inline labels are gone.
+    expect(within(engine).queryByText('presidio')).toBeNull();
+    expect(within(engine).queryByText('Requirement')).toBeNull();
+    expect(within(engine).queryByText('Rollout mode')).toBeNull();
+    // Old ambiguous copy + inheritance jargon stay gone.
     expect(within(engine).queryByText(/Off ignores, Shadow observes/)).toBeNull();
     expect(within(engine).queryByText(/automatically Required if any entity/)).toBeNull();
   });

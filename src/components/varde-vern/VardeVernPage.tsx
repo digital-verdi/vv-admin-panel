@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Icon, Tabs, Tooltip } from '@clickhouse/click-ui';
+import { Icon, Tabs } from '@clickhouse/click-ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { ReactNode } from 'react';
 import type { Tone } from './operations';
 import type * as t from '@/types';
 import {
@@ -17,19 +16,15 @@ import {
 } from './operations';
 import { SelectField, NumberField } from '@/components/configuration/fields';
 import { vardeVernQueryOptions, saveVardeVernFn } from '@/server';
+import { Section, Badge, ColumnHeader, HelpTooltip } from './ui';
 import { EmptyState, LoadingState } from '@/components/shared';
-import { notifySuccess, notifyError, cn } from '@/utils';
+import { notifySuccess, notifyError } from '@/utils';
 import { SystemCapabilities } from '@/constants';
+import { InsightPanel } from './InsightPanel';
 import { PresidioPanel } from './PresidioPanel';
 import { useCapabilities } from '@/hooks';
 
-type SubTab = 'overview' | 'local' | 'presidio';
-
-const TONE_CLASS: Record<Tone, string> = {
-  protective: 'bg-(--cui-color-background-success) text-(--cui-color-text-success)',
-  measuring: 'bg-(--cui-color-background-accent-muted) text-(--cui-color-text-accent)',
-  inactive: 'bg-(--cui-color-background-muted) text-(--cui-color-text-muted)',
-};
+type SubTab = 'overview' | 'local' | 'presidio' | 'insight';
 
 // Authoritative (regex) entities may never be weaker than enforce (ADR 0005) → enforce/block only.
 const REGEX_ACTIONS: t.SelectOption[] = [
@@ -68,42 +63,6 @@ const STATUS_OPTIONS: t.SelectOption[] = [
   { label: 'Required', value: 'required' },
 ];
 
-function Badge({ tone, children }: { tone: Tone; children: ReactNode }) {
-  return (
-    <span
-      className={cn(
-        'inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium',
-        TONE_CLASS[tone],
-      )}
-    >
-      {children}
-    </span>
-  );
-}
-
-function Section({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description?: string;
-  children: ReactNode;
-}) {
-  return (
-    <section
-      aria-label={title}
-      className="rounded-lg border border-(--cui-color-stroke-default) p-4"
-    >
-      <h2 className="text-sm font-semibold text-(--cui-color-title-default)">{title}</h2>
-      {description && (
-        <p className="mt-1 mb-3 text-xs text-(--cui-color-text-muted)">{description}</p>
-      )}
-      <div className="flex flex-col">{children}</div>
-    </section>
-  );
-}
-
 // The global Varde Vern status badge — `piiEnabled` is the effective runtime activation from the proxy;
 // `undefined` (older proxy) reads as `unknown` rather than implying either state.
 function globalStatusBadge(piiEnabled?: boolean): { tone: Tone; label: string } {
@@ -112,35 +71,8 @@ function globalStatusBadge(piiEnabled?: boolean): { tone: Tone; label: string } 
   return { tone: 'inactive', label: 'unknown' };
 }
 
-// A keyboard/screen-reader-accessible help marker: a focusable "?" whose description is exposed via the
-// click-ui Tooltip (Radix) — replacing the old aria-hidden `title` affordance that touch + AT users missed.
-function HelpTooltip({ label, text }: { label: string; text: string }) {
-  return (
-    <Tooltip>
-      <Tooltip.Trigger
-        role="button"
-        tabIndex={0}
-        aria-label={`More information about ${label}`}
-        className="ml-1 inline-flex cursor-help text-xs text-(--cui-color-text-muted)"
-      >
-        ?
-      </Tooltip.Trigger>
-      <Tooltip.Content maxWidth="18rem">{text}</Tooltip.Content>
-    </Tooltip>
-  );
-}
-
-function ColumnHeader({ label, tooltip }: { label: string; tooltip?: string }) {
-  return (
-    <th scope="col" className="px-4 py-2.5 font-medium text-(--cui-color-text-muted)">
-      {label}
-      {tooltip && <HelpTooltip label={label} text={tooltip} />}
-    </th>
-  );
-}
-
 function isSubTab(v: string): v is SubTab {
-  return v === 'overview' || v === 'local' || v === 'presidio';
+  return v === 'overview' || v === 'local' || v === 'presidio' || v === 'insight';
 }
 
 export function VardeVernPage() {
@@ -445,10 +377,12 @@ export function VardeVernPage() {
           <Tabs.Trigger value="overview">Overview</Tabs.Trigger>
           <Tabs.Trigger value="local">Local PII engine</Tabs.Trigger>
           <Tabs.Trigger value="presidio">Presidio Analyzer</Tabs.Trigger>
+          <Tabs.Trigger value="insight">Insight</Tabs.Trigger>
         </Tabs.TriggersList>
         <Tabs.Content value="overview" tabIndex={-1} />
         <Tabs.Content value="local" tabIndex={-1} />
         <Tabs.Content value="presidio" tabIndex={-1} />
+        <Tabs.Content value="insight" tabIndex={-1} />
       </Tabs>
 
       {subTab === 'overview' && (
@@ -743,6 +677,12 @@ export function VardeVernPage() {
               presidioStatus={savedPresidio?.status ?? 'disabled'}
             />
           </Section>
+        </div>
+      )}
+
+      {subTab === 'insight' && (
+        <div className="flex flex-col gap-4">
+          <InsightPanel canManage={canManage} />
         </div>
       )}
 

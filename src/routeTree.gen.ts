@@ -14,6 +14,7 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppVardeVernRouteImport } from './routes/_app/varde-vern'
 import { Route as AppUsersRouteImport } from './routes/_app/users'
+import { Route as AppSecurityInsightRouteImport } from './routes/_app/security-insight'
 import { Route as AppLlmRouterRouteImport } from './routes/_app/llm-router'
 import { Route as AppInvitesRouteImport } from './routes/_app/invites'
 import { Route as AppHelpRouteImport } from './routes/_app/help'
@@ -44,6 +45,11 @@ const AppVardeVernRoute = AppVardeVernRouteImport.update({
 const AppUsersRoute = AppUsersRouteImport.update({
   id: '/users',
   path: '/users',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSecurityInsightRoute = AppSecurityInsightRouteImport.update({
+  id: '/security-insight',
+  path: '/security-insight',
   getParentRoute: () => AppRoute,
 } as any)
 const AppLlmRouterRoute = AppLlmRouterRouteImport.update({
@@ -90,6 +96,7 @@ export interface FileRoutesByFullPath {
   '/help': typeof AppHelpRoute
   '/invites': typeof AppInvitesRoute
   '/llm-router': typeof AppLlmRouterRoute
+  '/security-insight': typeof AppSecurityInsightRoute
   '/users': typeof AppUsersRoute
   '/varde-vern': typeof AppVardeVernRoute
   '/auth/openid/callback': typeof AuthOpenidCallbackRoute
@@ -102,6 +109,7 @@ export interface FileRoutesByTo {
   '/help': typeof AppHelpRoute
   '/invites': typeof AppInvitesRoute
   '/llm-router': typeof AppLlmRouterRoute
+  '/security-insight': typeof AppSecurityInsightRoute
   '/users': typeof AppUsersRoute
   '/varde-vern': typeof AppVardeVernRoute
   '/': typeof AppIndexRoute
@@ -117,6 +125,7 @@ export interface FileRoutesById {
   '/_app/help': typeof AppHelpRoute
   '/_app/invites': typeof AppInvitesRoute
   '/_app/llm-router': typeof AppLlmRouterRoute
+  '/_app/security-insight': typeof AppSecurityInsightRoute
   '/_app/users': typeof AppUsersRoute
   '/_app/varde-vern': typeof AppVardeVernRoute
   '/_app/': typeof AppIndexRoute
@@ -133,6 +142,7 @@ export interface FileRouteTypes {
     | '/help'
     | '/invites'
     | '/llm-router'
+    | '/security-insight'
     | '/users'
     | '/varde-vern'
     | '/auth/openid/callback'
@@ -145,6 +155,7 @@ export interface FileRouteTypes {
     | '/help'
     | '/invites'
     | '/llm-router'
+    | '/security-insight'
     | '/users'
     | '/varde-vern'
     | '/'
@@ -159,6 +170,7 @@ export interface FileRouteTypes {
     | '/_app/help'
     | '/_app/invites'
     | '/_app/llm-router'
+    | '/_app/security-insight'
     | '/_app/users'
     | '/_app/varde-vern'
     | '/_app/'
@@ -207,6 +219,13 @@ declare module '@tanstack/react-router' {
       path: '/users'
       fullPath: '/users'
       preLoaderRoute: typeof AppUsersRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/security-insight': {
+      id: '/_app/security-insight'
+      path: '/security-insight'
+      fullPath: '/security-insight'
+      preLoaderRoute: typeof AppSecurityInsightRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/llm-router': {
@@ -267,6 +286,7 @@ interface AppRouteChildren {
   AppHelpRoute: typeof AppHelpRoute
   AppInvitesRoute: typeof AppInvitesRoute
   AppLlmRouterRoute: typeof AppLlmRouterRoute
+  AppSecurityInsightRoute: typeof AppSecurityInsightRoute
   AppUsersRoute: typeof AppUsersRoute
   AppVardeVernRoute: typeof AppVardeVernRoute
   AppIndexRoute: typeof AppIndexRoute
@@ -279,6 +299,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppHelpRoute: AppHelpRoute,
   AppInvitesRoute: AppInvitesRoute,
   AppLlmRouterRoute: AppLlmRouterRoute,
+  AppSecurityInsightRoute: AppSecurityInsightRoute,
   AppUsersRoute: AppUsersRoute,
   AppVardeVernRoute: AppVardeVernRoute,
   AppIndexRoute: AppIndexRoute,

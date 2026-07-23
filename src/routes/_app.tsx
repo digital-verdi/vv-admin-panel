@@ -17,10 +17,10 @@ const ROUTE_TITLE_KEYS: Record<string, string> = {
   '/access': 'com_access_title',
   '/llm-router': 'com_llm_router_title',
   '/varde-vern': 'com_varde_vern_title',
+  '/security-insight': 'com_nav_security_insight',
   '/grants': 'com_grants_title',
   '/help': 'com_help_title',
 };
-
 
 export const Route = createFileRoute('/_app')({
   beforeLoad: async ({ location }) => {

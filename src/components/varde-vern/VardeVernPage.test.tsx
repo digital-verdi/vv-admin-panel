@@ -298,7 +298,7 @@ describe('VardeVernPage — table redesign + English-only UI', () => {
   it('the Presidio rollout status (optional/required) is editable and round-trips', async () => {
     renderPage();
     await openPresidioTab();
-    const status = await screen.findByLabelText('presidio status');
+    const status = await screen.findByLabelText('Presidio requirement');
     fireEvent.change(status, { target: { value: 'required' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(saveFn).toHaveBeenCalledTimes(1));
@@ -307,6 +307,24 @@ describe('VardeVernPage — table redesign + English-only UI', () => {
     };
     const presidio = arg.data.rollout.engines.find((e) => e.engineId === 'presidio');
     expect(presidio!.status).toBe('required');
+  });
+
+  it('labels the Presidio dropdowns and shows the two-part engine help copy', async () => {
+    renderPage();
+    await openPresidioTab();
+    const engine = screen.getByRole('region', { name: 'Presidio engine' });
+    // Visible Sentence-case labels above each dropdown (DoD).
+    expect(within(engine).getByText('Requirement')).toBeInTheDocument();
+    expect(within(engine).getByText('Rollout mode')).toBeInTheDocument();
+    // Two-part, consequence-driven help copy replaces the old ambiguous single line.
+    expect(within(engine).getByText('Presidio requirement')).toBeInTheDocument();
+    expect(within(engine).getByText('Presidio rollout mode')).toBeInTheDocument();
+    expect(within(engine).getByText(/Controls how connection failures are handled/)).toBeInTheDocument();
+    expect(within(engine).getByText(/blocks the request entirely/)).toBeInTheDocument();
+    expect(within(engine).getByText(/Controls how the engine applies findings/)).toBeInTheDocument();
+    expect(within(engine).getByText(/Required cannot be combined with Off/)).toBeInTheDocument();
+    // The old ambiguous copy is fully gone.
+    expect(within(engine).queryByText(/Off ignores, Shadow observes/)).toBeNull();
   });
 
   it('seeds semantic entities to the backend shadow default (no hardcoded enforce fallback)', async () => {
@@ -399,7 +417,7 @@ describe('VardeVernPage — table redesign + English-only UI', () => {
     };
     renderPage();
     await openPresidioTab();
-    const phaseSelect = await screen.findByLabelText('presidio rollout phase');
+    const phaseSelect = await screen.findByLabelText('Presidio rollout mode');
     expect(within(phaseSelect).queryByRole('option', { name: 'Off' })).toBeNull();
     expect(within(phaseSelect).getByRole('option', { name: 'Shadow' })).toBeInTheDocument();
   });
@@ -457,8 +475,8 @@ describe('VardeVernPage — table redesign + English-only UI', () => {
     };
     renderPage();
     await openPresidioTab();
-    fireEvent.change(await screen.findByLabelText('presidio status'), { target: { value: 'required' } });
-    expect((screen.getByLabelText('presidio rollout phase') as HTMLSelectElement).value).toBe('shadow');
+    fireEvent.change(await screen.findByLabelText('Presidio requirement'), { target: { value: 'required' } });
+    expect((screen.getByLabelText('Presidio rollout mode') as HTMLSelectElement).value).toBe('shadow');
     expect(screen.queryByText(/Presidio cannot be Off while it is required/i)).toBeNull();
     expect(screen.getByRole('button', { name: 'Save' })).not.toBeDisabled();
   });
@@ -476,7 +494,7 @@ describe('VardeVernPage — table redesign + English-only UI', () => {
     fireEvent.change(within(integrated).getByLabelText('Person Presidio requirement'), {
       target: { value: 'required' },
     });
-    expect((screen.getByLabelText('presidio rollout phase') as HTMLSelectElement).value).toBe('shadow');
+    expect((screen.getByLabelText('Presidio rollout mode') as HTMLSelectElement).value).toBe('shadow');
     expect(screen.queryByText(/Presidio cannot be Off while it is required/i)).toBeNull();
   });
 
@@ -494,11 +512,11 @@ describe('VardeVernPage — table redesign + English-only UI', () => {
     fireEvent.change(within(integrated).getByLabelText('Person Presidio requirement'), {
       target: { value: 'required' },
     });
-    const phaseSelect = screen.getByLabelText('presidio rollout phase');
+    const phaseSelect = screen.getByLabelText('Presidio rollout mode');
     expect(within(phaseSelect).queryByRole('option', { name: 'Off' })).toBeNull();
     expect(within(phaseSelect).getByRole('option', { name: 'Shadow' })).toBeInTheDocument();
     // The requirement came from the entity — the engine status is untouched.
-    expect((screen.getByLabelText('presidio status') as HTMLSelectElement).value).toBe('optional');
+    expect((screen.getByLabelText('Presidio requirement') as HTMLSelectElement).value).toBe('optional');
   });
 
   it('threads the SAVED presidio phase/status + entity actions to the panel — never the local unsaved edits', async () => {
@@ -522,7 +540,7 @@ describe('VardeVernPage — table redesign + English-only UI', () => {
       ORG: 'shadow',
     });
     // Make LOCAL edits that DIFFER from the saved values; the panel must keep receiving the SAVED values.
-    fireEvent.change(screen.getByLabelText('presidio rollout phase'), { target: { value: 'enforce' } });
+    fireEvent.change(screen.getByLabelText('Presidio rollout mode'), { target: { value: 'enforce' } });
     fireEvent.change(within(integrated).getByLabelText('Person enforcement mode'), {
       target: { value: 'enforce' },
     });

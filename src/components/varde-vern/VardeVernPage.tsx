@@ -70,11 +70,11 @@ function Badge({ tone, children }: { tone: Tone; children: ReactNode }) {
   );
 }
 
-function Section({ title, description, children }: { title: string; description: string; children: ReactNode }) {
+function Section({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
   return (
     <section aria-label={title} className="rounded-lg border border-(--cui-color-stroke-default) p-4">
       <h2 className="text-sm font-semibold text-(--cui-color-title-default)">{title}</h2>
-      <p className="mt-1 mb-3 text-xs text-(--cui-color-text-muted)">{description}</p>
+      {description && <p className="mt-1 mb-3 text-xs text-(--cui-color-text-muted)">{description}</p>}
       <div className="flex flex-col">{children}</div>
     </section>
   );
@@ -333,27 +333,43 @@ export function VardeVernPage() {
         {locked ? (
           <Badge tone={phaseTone(engine.rolloutPhase)}>{engine.rolloutPhase} (locked)</Badge>
         ) : (
-          <div className="flex flex-wrap items-center gap-3">
-            <SelectField
-              id={`status-${engine.engineId}`}
-              value={engine.status}
-              options={STATUS_OPTIONS}
-              onChange={(v) => {
-                const next = v as t.VardeVernEngineStatus;
-                setStatus(engine.engineId, next);
-                if (next === 'required' && engine.rolloutPhase === 'off') setPhase(engine.engineId, 'shadow');
-              }}
-              disabled={disabled}
-              aria-label={`${engine.engineId} status`}
-            />
-            <SelectField
-              id={`phase-${engine.engineId}`}
-              value={engine.rolloutPhase}
-              options={presidioRequired ? PHASE_OPTIONS_REQUIRED : PHASE_OPTIONS}
-              onChange={(v) => setPhase(engine.engineId, v as t.VardeVernRolloutPhase)}
-              disabled={disabled}
-              aria-label={`${engine.engineId} rollout phase`}
-            />
+          <div className="flex flex-wrap items-end gap-4">
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor={`status-${engine.engineId}`}
+                className="text-xs font-medium text-(--cui-color-text-muted)"
+              >
+                Requirement
+              </label>
+              <SelectField
+                id={`status-${engine.engineId}`}
+                value={engine.status}
+                options={STATUS_OPTIONS}
+                onChange={(v) => {
+                  const next = v as t.VardeVernEngineStatus;
+                  setStatus(engine.engineId, next);
+                  if (next === 'required' && engine.rolloutPhase === 'off') setPhase(engine.engineId, 'shadow');
+                }}
+                disabled={disabled}
+                aria-label="Presidio requirement"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor={`phase-${engine.engineId}`}
+                className="text-xs font-medium text-(--cui-color-text-muted)"
+              >
+                Rollout mode
+              </label>
+              <SelectField
+                id={`phase-${engine.engineId}`}
+                value={engine.rolloutPhase}
+                options={presidioRequired ? PHASE_OPTIONS_REQUIRED : PHASE_OPTIONS}
+                onChange={(v) => setPhase(engine.engineId, v as t.VardeVernRolloutPhase)}
+                disabled={disabled}
+                aria-label="Presidio rollout mode"
+              />
+            </div>
           </div>
         )}
       </div>
@@ -494,10 +510,30 @@ export function VardeVernPage() {
 
       {subTab === 'presidio' && (
         <div className="flex flex-col gap-4">
-          <Section
-            title="Presidio engine"
-            description="Presidio is required if the engine or any entity is marked Required. Off ignores, Shadow observes, and Enforce masks or blocks. Required cannot be Off."
-          >
+          <Section title="Presidio engine">
+            <div className="mt-1 mb-4 flex flex-col gap-3">
+              <div>
+                <p className="text-xs font-medium text-(--cui-color-text-default)">Presidio requirement</p>
+                <p className="mt-0.5 text-xs text-(--cui-color-text-muted)">
+                  Controls how connection failures are handled.{' '}
+                  <strong className="font-medium text-(--cui-color-text-default)">Optional</strong> lets the
+                  request proceed to the LLM provider even if Presidio is unavailable.{' '}
+                  <strong className="font-medium text-(--cui-color-text-default)">Required</strong> blocks the
+                  request entirely. (Presidio is automatically Required if any entity is marked as such).
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-(--cui-color-text-default)">Presidio rollout mode</p>
+                <p className="mt-0.5 text-xs text-(--cui-color-text-muted)">
+                  Controls how the engine applies findings.{' '}
+                  <strong className="font-medium text-(--cui-color-text-default)">Off</strong> disables
+                  analysis. <strong className="font-medium text-(--cui-color-text-default)">Shadow</strong> logs
+                  findings without altering the request.{' '}
+                  <strong className="font-medium text-(--cui-color-text-default)">Enforce</strong> actively masks
+                  or blocks data based on your entity policy. (Required cannot be combined with Off).
+                </p>
+              </div>
+            </div>
             {rollout.filter((e) => e.engineId !== 'regex').length === 0 ? (
               <p className="py-2 text-xs text-(--cui-color-text-muted)">Presidio has no rollout entry yet.</p>
             ) : (

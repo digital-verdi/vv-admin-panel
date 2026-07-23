@@ -6,7 +6,9 @@ import { PresidioPanel } from './PresidioPanel';
 
 const testFn = vi.fn().mockResolvedValue({
   status: 'success',
-  findings: [{ entityType: 'PERSON', startUtf16: 0, endUtf16: 3, score: 0.9, abovePolicyThreshold: true }],
+  findings: [
+    { entityType: 'PERSON', startUtf16: 0, endUtf16: 3, score: 0.9, abovePolicyThreshold: true },
+  ],
 });
 const refreshFn = vi.fn().mockResolvedValue({ state: 'ready', supportedEntities: ['PERSON'] });
 
@@ -18,18 +20,32 @@ vi.mock('@/utils', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/utils')>();
   return { ...actual, notifyError: vi.fn() };
 });
-vi.mock('@clickhouse/click-ui', () => ({ Icon: ({ name }: { name: string }) => <span data-icon={name} /> }));
+vi.mock('@clickhouse/click-ui', () => ({
+  Icon: ({ name }: { name: string }) => <span data-icon={name} />,
+}));
 vi.mock('@/components/configuration/fields', () => ({
   SelectField: (p: { value: string; onChange: (v: string) => void; 'aria-label'?: string }) => (
-    <select aria-label={p['aria-label']} value={p.value} onChange={(e) => p.onChange(e.target.value)}>
+    <select
+      aria-label={p['aria-label']}
+      value={p.value}
+      onChange={(e) => p.onChange(e.target.value)}
+    >
       <option value="nb">nb</option>
       <option value="en">en</option>
     </select>
   ),
   TextareaField: (p: { value: string; onChange: (v: string) => void; 'aria-label'?: string }) => (
-    <textarea aria-label={p['aria-label']} value={p.value} onChange={(e) => p.onChange(e.target.value)} />
+    <textarea
+      aria-label={p['aria-label']}
+      value={p.value}
+      onChange={(e) => p.onChange(e.target.value)}
+    />
   ),
-  NumberField: (p: { value: number | null; onChange: (v: number) => void; 'aria-label'?: string }) => (
+  NumberField: (p: {
+    value: number | null;
+    onChange: (v: number) => void;
+    'aria-label'?: string;
+  }) => (
     <input
       type="number"
       aria-label={p['aria-label']}
@@ -51,6 +67,7 @@ const CONFIGURED: t.PresidioStatus = {
   lastProbeAt: null,
   lastProbeLatencyMs: null,
   supportedEntities: ['PERSON', 'LOCATION'],
+  semanticScoreFixed: 0.85,
   nlpEngine: 'spaCy (SpacyRecognizer)',
   localEngine: 'Regex, Checksums (handles structural identifiers)',
   inactiveModules: ['Transformers', 'Stanza', 'Pattern recognizers', 'Deny/Allow-lists'],
@@ -67,7 +84,8 @@ function renderPanel(
   } = {},
 ) {
   const qc =
-    opts.qc ?? new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    opts.qc ??
+    new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
       <PresidioPanel
@@ -120,12 +138,30 @@ describe('PresidioPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: /analyze/i }));
     await waitFor(() => expect(testFn).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(screen.getByText('0–3')).toBeInTheDocument());
-    expect(screen.getByText('90%')).toBeInTheDocument();
+    // Score is the raw 0–1 analyzer value, not a percentage (spaCy returns a FIXED score, not a probability).
+    expect(screen.getByText('0.9')).toBeInTheDocument();
+    expect(screen.queryByText('90%')).toBeNull();
     await waitFor(() => expect(container.querySelector('mark')?.textContent).toBe('Ola'));
   });
 
+  it('test studio: the results legend explains Score is a fixed technical value, not a probability', async () => {
+    renderPanel(CONFIGURED, { canManage: true });
+    fireEvent.click(screen.getByRole('button', { name: /analyze/i }));
+    await waitFor(() => expect(screen.getByText('0–3')).toBeInTheDocument());
+    // The note is a bare text node in a mixed-content <p>, so match the paragraph's full textContent.
+    expect(
+      screen.getByText(
+        (_content, el) =>
+          el?.tagName === 'P' &&
+          /fixed 0\.85, not a calibrated probability/.test(el.textContent ?? ''),
+      ),
+    ).toBeInTheDocument();
+  });
+
   it('F12b: Refresh invalidates the varde-vern query so the status updates', async () => {
-    const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
     const invalidate = vi.spyOn(qc, 'invalidateQueries');
     renderPanel(CONFIGURED, { canManage: true, qc });
     fireEvent.click(screen.getByRole('button', { name: /refresh/i }));
@@ -138,7 +174,9 @@ describe('PresidioPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: /analyze/i }));
     await waitFor(() => expect(container.querySelector('mark')?.textContent).toBe('Ola'));
     // Edit the textarea AFTER analyzing — the mark must still reflect the analyzed snapshot, not the new text.
-    fireEvent.change(screen.getByLabelText('Sample text'), { target: { value: 'ZZZ totally different' } });
+    fireEvent.change(screen.getByLabelText('Sample text'), {
+      target: { value: 'ZZZ totally different' },
+    });
     expect(container.querySelector('mark')?.textContent).toBe('Ola');
   });
 
@@ -154,7 +192,9 @@ describe('PresidioPanel', () => {
     fireEvent.click(screen.getByLabelText('Person')); // entity-filter checkbox (title-case display name)
     fireEvent.click(screen.getByRole('button', { name: /analyze/i }));
     await waitFor(() => expect(testFn).toHaveBeenCalledTimes(1));
-    const arg = testFn.mock.calls[0]![0] as { data: { entities?: string[]; scoreThreshold?: number } };
+    const arg = testFn.mock.calls[0]![0] as {
+      data: { entities?: string[]; scoreThreshold?: number };
+    };
     expect(arg.data.entities).toEqual(['PERSON']);
     expect(arg.data.scoreThreshold).toBe(0.5);
   });
@@ -168,16 +208,70 @@ describe('PresidioPanel', () => {
     above: boolean;
     expected: string;
   }[] = [
-    { presidioStatus: 'disabled', presidioPhase: 'enforce', action: 'enforce', above: true, expected: 'ignore' },
-    { presidioStatus: 'optional', presidioPhase: 'off', action: 'enforce', above: true, expected: 'ignore' },
-    { presidioStatus: 'optional', presidioPhase: 'shadow', action: 'allow', above: true, expected: 'ignore' },
-    { presidioStatus: 'optional', presidioPhase: 'shadow', action: 'enforce', above: true, expected: 'observe' },
-    { presidioStatus: 'optional', presidioPhase: 'enforce', action: 'shadow', above: true, expected: 'observe' },
-    { presidioStatus: 'optional', presidioPhase: 'enforce', action: 'enforce', above: false, expected: 'ignore' },
-    { presidioStatus: 'optional', presidioPhase: 'enforce', action: 'enforce', above: true, expected: 'mask' },
-    { presidioStatus: 'optional', presidioPhase: 'enforce', action: 'block', above: true, expected: 'block' },
+    {
+      presidioStatus: 'disabled',
+      presidioPhase: 'enforce',
+      action: 'enforce',
+      above: true,
+      expected: 'ignore',
+    },
+    {
+      presidioStatus: 'optional',
+      presidioPhase: 'off',
+      action: 'enforce',
+      above: true,
+      expected: 'ignore',
+    },
+    {
+      presidioStatus: 'optional',
+      presidioPhase: 'shadow',
+      action: 'allow',
+      above: true,
+      expected: 'ignore',
+    },
+    {
+      presidioStatus: 'optional',
+      presidioPhase: 'shadow',
+      action: 'enforce',
+      above: true,
+      expected: 'observe',
+    },
+    {
+      presidioStatus: 'optional',
+      presidioPhase: 'enforce',
+      action: 'shadow',
+      above: true,
+      expected: 'observe',
+    },
+    {
+      presidioStatus: 'optional',
+      presidioPhase: 'enforce',
+      action: 'enforce',
+      above: false,
+      expected: 'ignore',
+    },
+    {
+      presidioStatus: 'optional',
+      presidioPhase: 'enforce',
+      action: 'enforce',
+      above: true,
+      expected: 'mask',
+    },
+    {
+      presidioStatus: 'optional',
+      presidioPhase: 'enforce',
+      action: 'block',
+      above: true,
+      expected: 'block',
+    },
     // presidioStatus='required' exercises the non-disabled "proceeds" branch (all other rows use disabled/optional).
-    { presidioStatus: 'required', presidioPhase: 'enforce', action: 'enforce', above: true, expected: 'mask' },
+    {
+      presidioStatus: 'required',
+      presidioPhase: 'enforce',
+      action: 'enforce',
+      above: true,
+      expected: 'mask',
+    },
   ];
 
   it.each(DECISION_CASES)(
@@ -185,7 +279,15 @@ describe('PresidioPanel', () => {
     async ({ presidioStatus, presidioPhase, action, above, expected }) => {
       testFn.mockResolvedValueOnce({
         status: 'success',
-        findings: [{ entityType: 'PERSON', startUtf16: 0, endUtf16: 3, score: 0.9, abovePolicyThreshold: above }],
+        findings: [
+          {
+            entityType: 'PERSON',
+            startUtf16: 0,
+            endUtf16: 3,
+            score: 0.9,
+            abovePolicyThreshold: above,
+          },
+        ],
       });
       renderPanel(CONFIGURED, {
         canManage: true,
@@ -205,7 +307,9 @@ describe('PresidioPanel', () => {
     renderPanel(CONFIGURED, { canManage: true });
     expect(screen.getByText('Test score filter')).toBeInTheDocument();
     expect(
-      screen.getAllByText('Filters this test only. Saved entity thresholds are evaluated separately.'),
+      screen.getAllByText(
+        'Filters this test only. Saved entity thresholds are evaluated separately.',
+      ),
     ).toHaveLength(1);
     // The saved-policy minimum-score copy lives on the page, never inside the test studio.
     expect(screen.queryByText(/Findings below this value are ignored/)).toBeNull();
@@ -233,7 +337,15 @@ describe('PresidioPanel', () => {
   it('the "Policy score" column chips "below" for a below-threshold finding', async () => {
     testFn.mockResolvedValueOnce({
       status: 'success',
-      findings: [{ entityType: 'PERSON', startUtf16: 0, endUtf16: 3, score: 0.4, abovePolicyThreshold: false }],
+      findings: [
+        {
+          entityType: 'PERSON',
+          startUtf16: 0,
+          endUtf16: 3,
+          score: 0.4,
+          abovePolicyThreshold: false,
+        },
+      ],
     });
     renderPanel(CONFIGURED, { canManage: true });
     fireEvent.click(screen.getByRole('button', { name: /analyze/i }));

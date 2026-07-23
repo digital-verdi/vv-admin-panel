@@ -7,13 +7,16 @@ export const PRESIDIO_SCORE_TEST_LABEL = 'Test score filter';
 export const PRESIDIO_SCORE_TEST_INTRO =
   'Filters this test only. Saved entity thresholds are evaluated separately.';
 
-/** Intro for the SAVED per-entity minimum-score policy. Names the live fixed spaCy score when the backend
- *  exposes it, so the cutoff reads concretely; omits the number gracefully when it is not available. */
-export function presidioScorePolicyIntro(fixedScore?: number): string {
+/** Intro for the SAVED per-entity minimum-score policy. Names the live fixed spaCy score AND the empty-state
+ *  default threshold when the backend exposes them, so the cutoff reads concretely; omits each number
+ *  gracefully when it is not available. `defaultScore` is the coarse default applied when the field is empty
+ *  (DEFAULT_PRESIDIO_CONFIDENCE), distinct from the fixed score spaCy returns. */
+export function presidioScorePolicyIntro(fixedScore?: number, defaultScore?: number): string {
+  const emptyNote = typeof defaultScore === 'number' ? ` Empty defaults to ${defaultScore}.` : '';
   if (typeof fixedScore === 'number') {
-    return `Findings below this value are ignored. It is a technical score, not a probability; spaCy currently returns ${fixedScore}, so higher values filter them out.`;
+    return `Findings below this value are ignored.${emptyNote} It is a technical score, not a probability; spaCy currently returns ${fixedScore}, so values above ${fixedScore} filter them out.`;
   }
-  return 'Findings below this value are ignored. It is a technical score, not a probability; the current spaCy recognizer returns a fixed score, so higher values filter them out.';
+  return `Findings below this value are ignored.${emptyNote} It is a technical score, not a probability; the current spaCy recognizer returns a fixed score, so higher values filter them out.`;
 }
 
 const ENTITY_DISPLAY_NAMES: Record<string, string> = {
@@ -94,4 +97,43 @@ export function actionTone(action: t.VardeVernAction): Tone {
   if (action === 'enforce' || action === 'block') return 'protective';
   if (action === 'shadow') return 'measuring';
   return 'inactive';
+}
+
+/** The effective runtime OUTCOME of one finding once the engine phase gates the entity action. */
+export type VernDisposition = 'ignore' | 'shadow' | 'enforce' | 'block';
+
+/**
+ * Mirror of the proxy's authoritative `disposition(action, phase)` (vv-llm-proxy `pii/vern-pipeline.ts`):
+ * the global Presidio rollout phase is a strict CEILING over the per-entity action — the most restrictive
+ * setting wins. `phase` is the engine's effective phase (`disabled` when it has no rollout entry or is
+ * switched off ⇒ the finding is ignored). Kept in lockstep with the proxy; the full truth table is pinned in
+ * `operations.test.ts`.
+ */
+export function effectiveDisposition(
+  action: t.VardeVernAction,
+  phase: t.VardeVernRolloutPhase | 'disabled',
+): VernDisposition {
+  if (phase === 'disabled' || phase === 'off') return 'ignore';
+  if (action === 'allow') return 'ignore';
+  if (action === 'shadow') return 'shadow';
+  if (phase !== 'enforce') return 'shadow';
+  return action === 'block' ? 'block' : 'enforce';
+}
+
+/** Presentation for an effective disposition — the outcome label + tone shown in the Effective column. */
+export function dispositionDisplay(disposition: VernDisposition): { label: string; tone: Tone } {
+  if (disposition === 'enforce') return { label: 'Mask', tone: 'protective' };
+  if (disposition === 'block') return { label: 'Reject', tone: 'protective' };
+  if (disposition === 'shadow') return { label: 'Observe', tone: 'measuring' };
+  return { label: 'Ignored', tone: 'inactive' };
+}
+
+/**
+ * Render a raw analyzer score as a plain 0–1 value (e.g. `0.85`) — NEVER a percentage. The current spaCy
+ * recognizer returns a FIXED score for every finding, so a `%` would dress a constant technical value up as a
+ * calibrated probability it does not have. Matches the 0–1 Minimum Score / test-filter fields. Trims float
+ * noise to at most two decimals.
+ */
+export function formatPresidioScore(score: number): string {
+  return String(Number(score.toFixed(2)));
 }

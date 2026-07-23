@@ -8,7 +8,7 @@ import type * as t from '@/types';
 import { SelectField, TextareaField } from '@/components/configuration/fields';
 import { testPresidioFn, refreshPresidioFn } from '@/server';
 import { PresidioScoreField } from './PresidioScoreField';
-import { entityDisplayName } from './operations';
+import { entityDisplayName, formatPresidioScore } from './operations';
 import { SpanMarker } from './SpanMarker';
 import { cn, notifyError } from '@/utils';
 
@@ -120,7 +120,7 @@ export function PresidioPanel({
         start: f.startUtf16,
         end: f.endUtf16,
         tone: f.abovePolicyThreshold ? 'protective' : 'measuring',
-        label: `${entityDisplayName(f.entityType)} · ${Math.round(f.score * 100)}%`,
+        label: `${entityDisplayName(f.entityType)} · ${formatPresidioScore(f.score)}`,
       })),
     [findings],
   );
@@ -134,15 +134,25 @@ export function PresidioPanel({
   }
 
   const live = status.state ?? 'unknown';
+  // The Score column shows the analyzer's RAW score. The current spaCy recognizer returns a FIXED score for
+  // every finding, so it is a technical value, not a calibrated probability — the legend says so, naming the
+  // reported fixed score when the backend exposes it.
+  const scoreNote =
+    typeof status.semanticScoreFixed === 'number'
+      ? `the current spaCy model returns a fixed ${status.semanticScoreFixed}, not a calibrated probability`
+      : 'a technical value from the analyzer, not a calibrated probability';
   // The client-side "what Varde Vern would enforce" decision for a finding (server-side always governs).
   const vernDecision = (f: t.PresidioFinding): { tone: Tone; label: string } => {
-    if (presidioStatus === 'disabled' || presidioPhase === 'off') return { tone: 'inactive', label: 'ignore' };
+    if (presidioStatus === 'disabled' || presidioPhase === 'off')
+      return { tone: 'inactive', label: 'ignore' };
     if (!f.abovePolicyThreshold) return { tone: 'inactive', label: 'ignore' };
     const action = entityActions[f.entityType];
     if (action === 'allow') return { tone: 'inactive', label: 'ignore' };
     if (action === 'shadow') return { tone: 'measuring', label: 'observe' };
     if (presidioPhase !== 'enforce') return { tone: 'measuring', label: 'observe' };
-    return action === 'block' ? { tone: 'protective', label: 'block' } : { tone: 'protective', label: 'mask' };
+    return action === 'block'
+      ? { tone: 'protective', label: 'block' }
+      : { tone: 'protective', label: 'mask' };
   };
 
   return (
@@ -152,7 +162,9 @@ export function PresidioPanel({
         <div className="mb-2 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Chip tone={STATE_TONE[live] ?? 'inactive'}>{live}</Chip>
-            <span className="text-sm font-medium text-(--cui-color-title-default)">Presidio Analyzer</span>
+            <span className="text-sm font-medium text-(--cui-color-title-default)">
+              Presidio Analyzer
+            </span>
           </div>
           {canManage && (
             <button
@@ -167,12 +179,21 @@ export function PresidioPanel({
           )}
         </div>
         <StatusRow label="Credential" value={status.credential ?? 'managed'} />
-        <StatusRow label="Image" value={`${status.imageMode ?? 'unknown'} · ${status.release ?? 'unknown'}`} />
+        <StatusRow
+          label="Image"
+          value={`${status.imageMode ?? 'unknown'} · ${status.release ?? 'unknown'}`}
+        />
         <StatusRow label="Digest" value={status.digest ?? 'unknown'} />
-        <StatusRow label="Languages" value={(status.languages ?? [status.language]).filter(Boolean).join(', ') || '—'} />
+        <StatusRow
+          label="Languages"
+          value={(status.languages ?? [status.language]).filter(Boolean).join(', ') || '—'}
+        />
         <StatusRow label="NLP Engine" value={status.nlpEngine ?? '—'} />
         <StatusRow label="Local PII engine" value={status.localEngine ?? '—'} />
-        <StatusRow label="Inactive modules" value={(status.inactiveModules ?? []).join(', ') || '—'} />
+        <StatusRow
+          label="Inactive modules"
+          value={(status.inactiveModules ?? []).join(', ') || '—'}
+        />
         <StatusRow
           label="Supported entities"
           value={(status.supportedEntities ?? []).join(', ') || '—'}
@@ -243,9 +264,14 @@ export function PresidioPanel({
         </div>
         {/* F12f: entity filter — restrict which semantic types Presidio is asked for. */}
         <fieldset className="mt-3 flex flex-wrap items-center gap-3">
-          <legend className="mr-1 text-xs text-(--cui-color-text-muted)">Entities (none = all):</legend>
+          <legend className="mr-1 text-xs text-(--cui-color-text-muted)">
+            Entities (none = all):
+          </legend>
           {REQUESTABLE_ENTITIES.map((e) => (
-            <label key={e} className="flex items-center gap-1 text-xs text-(--cui-color-text-default)">
+            <label
+              key={e}
+              className="flex items-center gap-1 text-xs text-(--cui-color-text-default)"
+            >
               <input
                 type="checkbox"
                 aria-label={entityDisplayName(e)}
@@ -266,9 +292,10 @@ export function PresidioPanel({
           <div className="mt-3 flex flex-col gap-2">
             <SpanMarker text={analyzedText} spans={spans} />
             <p className="text-xs text-(--cui-color-text-muted)">
-              <strong>Presidio</strong> = detected · <strong>Policy score</strong> = passes the saved
-              threshold · <strong>Varde Vern</strong> = ignore, observe, mask or block under the saved
-              policy and rollout.
+              <strong>Score</strong> = {scoreNote} · <strong>Presidio</strong> = detected ·{' '}
+              <strong>Policy score</strong> = passes the saved threshold ·{' '}
+              <strong>Varde Vern</strong> = ignore, observe, mask or block under the saved policy
+              and rollout.
             </p>
             <div className="overflow-x-auto rounded-lg border border-(--cui-color-stroke-default)">
               <table className="w-full text-left text-sm">
@@ -293,9 +320,12 @@ export function PresidioPanel({
                     findings.map((f, i) => {
                       const decision = vernDecision(f);
                       return (
-                        <tr key={`${f.entityType}-${f.startUtf16}-${i}`} className="border-t border-(--cui-color-stroke-default)">
+                        <tr
+                          key={`${f.entityType}-${f.startUtf16}-${i}`}
+                          className="border-t border-(--cui-color-stroke-default)"
+                        >
                           <td className="px-3 py-2">{entityDisplayName(f.entityType)}</td>
-                          <td className="px-3 py-2">{Math.round(f.score * 100)}%</td>
+                          <td className="px-3 py-2">{formatPresidioScore(f.score)}</td>
                           <td className="px-3 py-2 font-mono text-xs">
                             {f.startUtf16}–{f.endUtf16}
                           </td>

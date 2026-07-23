@@ -127,3 +127,13 @@ export function dispositionDisplay(disposition: VernDisposition): { label: strin
   if (disposition === 'shadow') return { label: 'Observe', tone: 'measuring' };
   return { label: 'Ignored', tone: 'inactive' };
 }
+
+/**
+ * Render a raw analyzer score as a plain 0–1 value (e.g. `0.85`) — NEVER a percentage. The current spaCy
+ * recognizer returns a FIXED score for every finding, so a `%` would dress a constant technical value up as a
+ * calibrated probability it does not have. Matches the 0–1 Minimum Score / test-filter fields. Trims float
+ * noise to at most two decimals.
+ */
+export function formatPresidioScore(score: number): string {
+  return String(Number(score.toFixed(2)));
+}

@@ -8,6 +8,7 @@ import {
   presidioScorePolicyIntro,
   effectiveDisposition,
   dispositionDisplay,
+  formatPresidioScore,
 } from './operations';
 
 const entity = (over: Partial<t.VardeVernEntity>): t.VardeVernEntity => ({
@@ -121,5 +122,20 @@ describe('dispositionDisplay', () => {
     expect(dispositionDisplay('shadow')).toEqual({ label: 'Observe', tone: 'measuring' });
     expect(dispositionDisplay('enforce')).toEqual({ label: 'Mask', tone: 'protective' });
     expect(dispositionDisplay('block')).toEqual({ label: 'Reject', tone: 'protective' });
+  });
+});
+
+describe('formatPresidioScore', () => {
+  it('renders a raw 0–1 score, never a percentage', () => {
+    expect(formatPresidioScore(0.85)).toBe('0.85');
+    expect(formatPresidioScore(0.9)).toBe('0.9');
+    expect(formatPresidioScore(1)).toBe('1');
+    expect(formatPresidioScore(0)).toBe('0');
+    expect(formatPresidioScore(0.85)).not.toContain('%');
+  });
+
+  it('trims float noise to at most two decimals', () => {
+    expect(formatPresidioScore(0.8500000001)).toBe('0.85');
+    expect(formatPresidioScore(0.123)).toBe('0.12');
   });
 });

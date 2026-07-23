@@ -40,7 +40,11 @@ const ENFORCEMENT_OFF: t.SelectOption = { label: 'Off', value: 'allow' };
 const ENFORCEMENT_SHADOW: t.SelectOption = { label: 'Shadow', value: 'shadow' };
 const ENFORCEMENT_ENFORCE: t.SelectOption = { label: 'Enforce', value: 'enforce' };
 const ENFORCEMENT_SHADOW_ONLY: t.SelectOption[] = [ENFORCEMENT_OFF, ENFORCEMENT_SHADOW];
-const ENFORCEMENT_GREEN: t.SelectOption[] = [ENFORCEMENT_OFF, ENFORCEMENT_SHADOW, ENFORCEMENT_ENFORCE];
+const ENFORCEMENT_GREEN: t.SelectOption[] = [
+  ENFORCEMENT_OFF,
+  ENFORCEMENT_SHADOW,
+  ENFORCEMENT_ENFORCE,
+];
 const GREEN_GATE_TOOLTIP = 'Enforce needs approved quality tests.';
 // Presidio requirement — Required maps to the per-entity `requiredEngines: ['presidio']`, Optional to [].
 const DETECTION_OPTIONS: t.SelectOption[] = [
@@ -64,17 +68,35 @@ const STATUS_OPTIONS: t.SelectOption[] = [
 
 function Badge({ tone, children }: { tone: Tone; children: ReactNode }) {
   return (
-    <span className={cn('inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium', TONE_CLASS[tone])}>
+    <span
+      className={cn(
+        'inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium',
+        TONE_CLASS[tone],
+      )}
+    >
       {children}
     </span>
   );
 }
 
-function Section({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
+function Section({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: ReactNode;
+}) {
   return (
-    <section aria-label={title} className="rounded-lg border border-(--cui-color-stroke-default) p-4">
+    <section
+      aria-label={title}
+      className="rounded-lg border border-(--cui-color-stroke-default) p-4"
+    >
       <h2 className="text-sm font-semibold text-(--cui-color-title-default)">{title}</h2>
-      {description && <p className="mt-1 mb-3 text-xs text-(--cui-color-text-muted)">{description}</p>}
+      {description && (
+        <p className="mt-1 mb-3 text-xs text-(--cui-color-text-muted)">{description}</p>
+      )}
       <div className="flex flex-col">{children}</div>
     </section>
   );
@@ -140,7 +162,9 @@ export function VardeVernPage() {
   if (isLoading || !data || !policy || !rollout) {
     return isError ? (
       <div className="p-6">
-        <EmptyState message={error instanceof Error ? error.message : 'Failed to load Varde Vern config.'} />
+        <EmptyState
+          message={error instanceof Error ? error.message : 'Failed to load Varde Vern config.'}
+        />
       </div>
     ) : (
       <LoadingState />
@@ -149,7 +173,8 @@ export function VardeVernPage() {
 
   const { regex, semantic } = groupEntitiesByEngine(data.entities);
   const disabled = !canManage || busy;
-  const analyzerLanguages = data.presidio?.languages ?? (data.presidio?.language ? [data.presidio.language] : ['nb', 'en']);
+  const analyzerLanguages =
+    data.presidio?.languages ?? (data.presidio?.language ? [data.presidio.language] : ['nb', 'en']);
   // The engine's fixed semantic score (the score spaCy ASSIGNS to a finding) — named in the Minimum Score
   // help text. Kept dynamic so it tracks the backend rather than hardcoding 0.85.
   const semanticFixedScore = data.presidio?.semanticScoreFixed ?? 0.85;
@@ -181,7 +206,9 @@ export function VardeVernPage() {
   );
   const setEntity = (type: string, patch: Partial<t.VardeVernEntityPolicy>) =>
     setPolicy((prev) =>
-      prev ? { ...prev, entities: { ...prev.entities, [type]: { ...entryOf(type), ...patch } } } : prev,
+      prev
+        ? { ...prev, entities: { ...prev.entities, [type]: { ...entryOf(type), ...patch } } }
+        : prev,
     );
   const setPhase = (engineId: string, rolloutPhase: t.VardeVernRolloutPhase) =>
     setRollout((prev) =>
@@ -204,7 +231,9 @@ export function VardeVernPage() {
   // Presidio is invalid when it has no rollout entry, is disabled, or is Off — so the client blocks every
   // state the backend would 400 on, not just the disabled/off ones.
   const presidioRolloutOff =
-    !presidioEngine || presidioEngine.status === 'disabled' || presidioEngine.rolloutPhase === 'off';
+    !presidioEngine ||
+    presidioEngine.status === 'disabled' ||
+    presidioEngine.rolloutPhase === 'off';
   const requiredOffInvalid = presidioRequired && presidioRolloutOff;
   // The test studio reflects the SAVED rollout (data.rollout), distinct from the local editable `rollout`.
   const savedPresidio = data.rollout.find((e) => e.engineId === 'presidio');
@@ -214,7 +243,11 @@ export function VardeVernPage() {
     setBusy(true);
     try {
       const result = await saveVardeVernFn({
-        data: { expectedRevision: data.configRevision, policy, rollout: { version: 1, engines: rollout } },
+        data: {
+          expectedRevision: data.configRevision,
+          policy,
+          rollout: { version: 1, engines: rollout },
+        },
       });
       if (result.status === 'version-mismatch') {
         notifyError('Varde Vern config changed elsewhere — reloading the latest.');
@@ -239,7 +272,9 @@ export function VardeVernPage() {
       >
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
-            <span className="block text-sm font-medium text-(--cui-color-text-default)">{entity.label}</span>
+            <span className="block text-sm font-medium text-(--cui-color-text-default)">
+              {entity.label}
+            </span>
             <span className="block text-xs text-(--cui-color-text-muted)">{entity.entityType}</span>
           </div>
           <div className="flex flex-wrap items-center gap-3">
@@ -273,7 +308,10 @@ export function VardeVernPage() {
         action === 'enforce' ? { action, enforceLanguages: green } : { action },
       );
     return (
-      <tr key={entity.entityType} className="border-b border-(--cui-color-stroke-default) last:border-b-0">
+      <tr
+        key={entity.entityType}
+        className="border-b border-(--cui-color-stroke-default) last:border-b-0"
+      >
         <td className="px-4 py-2.5 align-top">
           <span className="text-sm font-medium text-(--cui-color-text-default)">{name}</span>
         </td>
@@ -283,7 +321,9 @@ export function VardeVernPage() {
             value={detection}
             options={DETECTION_OPTIONS}
             onChange={(v) => {
-              setEntity(entity.entityType, { requiredEngines: v === 'required' ? ['presidio'] : [] });
+              setEntity(entity.entityType, {
+                requiredEngines: v === 'required' ? ['presidio'] : [],
+              });
               if (v === 'required' && presidioPhaseOff) setPhase('presidio', 'shadow');
             }}
             disabled={disabled}
@@ -300,7 +340,9 @@ export function VardeVernPage() {
               disabled={disabled}
               aria-label={`${name} enforcement mode`}
             />
-            {!canEnforce && <HelpTooltip label={`${name} enforce availability`} text={GREEN_GATE_TOOLTIP} />}
+            {!canEnforce && (
+              <HelpTooltip label={`${name} enforce availability`} text={GREEN_GATE_TOOLTIP} />
+            )}
           </div>
           {entry.action === 'enforce' && (
             <span className="mt-1 block text-xs text-(--cui-color-text-muted)">
@@ -334,7 +376,9 @@ export function VardeVernPage() {
       className="flex flex-col gap-2 border-b border-(--cui-color-stroke-default) py-3 last:border-0 sm:flex-row sm:items-center sm:justify-between"
     >
       <div className="min-w-0">
-        <span className="block text-sm font-medium text-(--cui-color-text-default)">{engine.engineId}</span>
+        <span className="block text-sm font-medium text-(--cui-color-text-default)">
+          {engine.engineId}
+        </span>
         <span className="block text-xs text-(--cui-color-text-muted)">{engine.status}</span>
       </div>
       <Badge tone={phaseTone(engine.rolloutPhase)}>{engine.rolloutPhase} (locked)</Badge>
@@ -345,8 +389,8 @@ export function VardeVernPage() {
     <div className="flex flex-1 flex-col gap-4 overflow-auto p-6">
       <div className="flex items-start justify-between gap-3">
         <p className="text-sm text-(--cui-color-text-muted)">
-          Varde Vern detects and protects sensitive data before requests reach the LLM. Changes apply
-          immediately when saved.
+          Varde Vern detects and protects sensitive data before requests reach the LLM. Changes
+          apply immediately when saved.
         </p>
         <button
           type="button"
@@ -374,8 +418,8 @@ export function VardeVernPage() {
           className="flex items-center gap-2 rounded-lg border border-(--cui-color-stroke-default) bg-(--cui-color-background-muted) p-3 text-xs text-(--cui-color-text-danger)"
         >
           <Icon name="warning" size="sm" />
-          Presidio cannot be Off while it is required by the engine or any entity. Fix its rollout on the
-          Presidio Analyzer tab before saving.
+          Presidio cannot be Off while it is required by the engine or any entity. Fix its rollout
+          on the Presidio Analyzer tab before saving.
         </div>
       )}
 
@@ -411,8 +455,16 @@ export function VardeVernPage() {
               </div>
               <div className="flex items-center justify-between py-1 text-sm">
                 <span className="text-(--cui-color-text-muted)">Presidio</span>
-                <Badge tone={data.presidio?.configured ? phaseTone(presidioEngine?.rolloutPhase ?? 'off') : 'inactive'}>
-                  {data.presidio?.configured ? `${data.presidio.state ?? 'unknown'} · ${presidioEngine?.rolloutPhase ?? 'off'}` : 'not configured'}
+                <Badge
+                  tone={
+                    data.presidio?.configured
+                      ? phaseTone(presidioEngine?.rolloutPhase ?? 'off')
+                      : 'inactive'
+                  }
+                >
+                  {data.presidio?.configured
+                    ? `${data.presidio.state ?? 'unknown'} · ${presidioEngine?.rolloutPhase ?? 'off'}`
+                    : 'not configured'}
                 </Badge>
               </div>
               <div className="flex items-center justify-between py-1 text-sm">
@@ -444,9 +496,23 @@ export function VardeVernPage() {
                           {e.engine === 'semantic' ? entityDisplayName(e.entityType) : e.label}
                         </span>
                       </td>
-                      <td className="px-3 py-2">{e.engine === 'regex' ? <Badge tone="protective">authoritative</Badge> : '–'}</td>
-                      <td className="px-3 py-2">{e.engine === 'semantic' ? <Badge tone="measuring">supplementary</Badge> : '–'}</td>
-                      <td className="px-3 py-2"><Badge tone={actionTone(e.action)}>{e.action}</Badge></td>
+                      <td className="px-3 py-2">
+                        {e.engine === 'regex' ? (
+                          <Badge tone="protective">authoritative</Badge>
+                        ) : (
+                          '–'
+                        )}
+                      </td>
+                      <td className="px-3 py-2">
+                        {e.engine === 'semantic' ? (
+                          <Badge tone="measuring">supplementary</Badge>
+                        ) : (
+                          '–'
+                        )}
+                      </td>
+                      <td className="px-3 py-2">
+                        <Badge tone={actionTone(e.action)}>{e.action}</Badge>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -477,18 +543,26 @@ export function VardeVernPage() {
         <div className="flex flex-col gap-4">
           <Section title="Presidio engine">
             {!presidioEngine ? (
-              <p className="py-2 text-xs text-(--cui-color-text-muted)">Presidio has no rollout entry yet.</p>
+              <p className="py-2 text-xs text-(--cui-color-text-muted)">
+                Presidio has no rollout entry yet.
+              </p>
             ) : (
               <div className="flex flex-col gap-5">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
                   <div className="min-w-0 sm:max-w-md">
-                    <p className="text-sm font-medium text-(--cui-color-text-default)">Presidio requirement</p>
+                    <p className="text-sm font-medium text-(--cui-color-text-default)">
+                      Presidio requirement
+                    </p>
                     <p className="mt-0.5 text-xs text-(--cui-color-text-muted)">
                       Controls how connection failures are handled.{' '}
-                      <strong className="font-medium text-(--cui-color-text-default)">Optional</strong> lets the
-                      request proceed to the LLM provider even if Presidio is unavailable.{' '}
-                      <strong className="font-medium text-(--cui-color-text-default)">Required</strong> blocks
-                      the request entirely, if the Presidio is unavailable.
+                      <strong className="font-medium text-(--cui-color-text-default)">
+                        Optional
+                      </strong>{' '}
+                      lets the request proceed to the LLM provider even if Presidio is unavailable.{' '}
+                      <strong className="font-medium text-(--cui-color-text-default)">
+                        Required
+                      </strong>{' '}
+                      blocks the request entirely, if the Presidio is unavailable.
                     </p>
                   </div>
                   <div className="shrink-0">
@@ -499,7 +573,8 @@ export function VardeVernPage() {
                       onChange={(v) => {
                         const next = v as t.VardeVernEngineStatus;
                         setStatus('presidio', next);
-                        if (next === 'required' && presidioEngine.rolloutPhase === 'off') setPhase('presidio', 'shadow');
+                        if (next === 'required' && presidioEngine.rolloutPhase === 'off')
+                          setPhase('presidio', 'shadow');
                       }}
                       disabled={disabled}
                       aria-label="Presidio requirement"
@@ -508,14 +583,22 @@ export function VardeVernPage() {
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
                   <div className="min-w-0 sm:max-w-md">
-                    <p className="text-sm font-medium text-(--cui-color-text-default)">Presidio rollout mode</p>
+                    <p className="text-sm font-medium text-(--cui-color-text-default)">
+                      Presidio rollout mode
+                    </p>
                     <p className="mt-0.5 text-xs text-(--cui-color-text-muted)">
                       Controls how the engine applies findings.{' '}
-                      <strong className="font-medium text-(--cui-color-text-default)">Off</strong> disables
-                      analysis. <strong className="font-medium text-(--cui-color-text-default)">Shadow</strong>{' '}
+                      <strong className="font-medium text-(--cui-color-text-default)">Off</strong>{' '}
+                      disables analysis.{' '}
+                      <strong className="font-medium text-(--cui-color-text-default)">
+                        Shadow
+                      </strong>{' '}
                       logs findings without altering the request.{' '}
-                      <strong className="font-medium text-(--cui-color-text-default)">Enforce</strong> actively
-                      masks or blocks data based on your entity policy. (Required cannot be combined with Off).
+                      <strong className="font-medium text-(--cui-color-text-default)">
+                        Enforce
+                      </strong>{' '}
+                      actively masks or blocks data based on your entity policy. (Required cannot be
+                      combined with Off).
                     </p>
                   </div>
                   <div className="shrink-0">
@@ -536,57 +619,71 @@ export function VardeVernPage() {
           <Section title="Integrated in Varde Vern">
             <div className="mb-4 flex flex-col gap-2 text-xs text-(--cui-color-text-muted)">
               <p>
-                Configure how Varde Vern handles specific data types (Person, Location, and Organization). The
-                global Presidio rollout mode acts as a strict limit—the most restrictive setting always wins:
+                Configure how Varde Vern handles specific data types (Person, Location, and
+                Organization). The global Presidio rollout mode acts as a strict limit—the most
+                restrictive setting always wins:
               </p>
               <ul className="ml-4 list-disc space-y-1">
                 <li>
-                  <strong className="font-medium text-(--cui-color-text-default)">If engine is Off:</strong> All
-                  data types are ignored, regardless of their setting.
+                  <strong className="font-medium text-(--cui-color-text-default)">
+                    If engine is Off:
+                  </strong>{' '}
+                  All data types are ignored, regardless of their setting.
                 </li>
                 <li>
-                  <strong className="font-medium text-(--cui-color-text-default)">If engine is Shadow:</strong>{' '}
+                  <strong className="font-medium text-(--cui-color-text-default)">
+                    If engine is Shadow:
+                  </strong>{' '}
                   Data types set to Enforce are downgraded to Shadow (observed only).
                 </li>
                 <li>
-                  <strong className="font-medium text-(--cui-color-text-default)">If engine is Enforce:</strong>{' '}
+                  <strong className="font-medium text-(--cui-color-text-default)">
+                    If engine is Enforce:
+                  </strong>{' '}
                   Each individual setting applies fully.
                 </li>
               </ul>
               <p>
                 Setting any row to{' '}
-                <strong className="font-medium text-(--cui-color-text-default)">Required</strong> makes the entire
-                Presidio connection mandatory, blocking the request if it fails.
+                <strong className="font-medium text-(--cui-color-text-default)">Required</strong>{' '}
+                makes the entire Presidio connection mandatory, blocking the request if it fails.
               </p>
               <p>
-                <strong className="font-medium text-(--cui-color-text-default)">Minimum Score:</strong> Findings
-                below this value are ignored. Left empty it defaults to {defaultMinScore}; the current engine
-                returns a fixed score of {semanticFixedScore}, so values above {semanticFixedScore} filter
-                findings out.
+                <strong className="font-medium text-(--cui-color-text-default)">
+                  Minimum Score:
+                </strong>{' '}
+                Findings below this value are ignored. Left empty it defaults to {defaultMinScore};
+                the current engine (spaCy) returns a fixed score of {semanticFixedScore}, so values
+                above {semanticFixedScore} filter findings out.
               </p>
             </div>
             {semantic.length === 0 ? (
-              <p className="py-2 text-xs text-(--cui-color-text-muted)">No integrated semantic entities in the catalog.</p>
+              <p className="py-2 text-xs text-(--cui-color-text-muted)">
+                No integrated semantic entities in the catalog.
+              </p>
             ) : (
               <div className="overflow-x-auto rounded-lg border border-(--cui-color-stroke-default)">
-                  <table className="w-full text-left text-sm">
-                    <thead>
-                      <tr className="border-b border-(--cui-color-stroke-default) bg-(--cui-color-background-muted)">
-                        <ColumnHeader label="Entity" />
-                        <ColumnHeader
-                          label="Presidio requirement"
-                          tooltip="Required makes Presidio mandatory for all protected requests. Optional adds no requirement by itself."
-                        />
-                        <ColumnHeader label="Enforcement Mode" />
-                        <ColumnHeader
-                          label="Minimum Score"
-                          tooltip={presidioScorePolicyIntro(data.presidio?.semanticScoreFixed, data.presidio?.defaultMinConfidence)}
-                        />
-                      </tr>
-                    </thead>
-                    <tbody>{semantic.map(integratedEntityRow)}</tbody>
-                  </table>
-                </div>
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-(--cui-color-stroke-default) bg-(--cui-color-background-muted)">
+                      <ColumnHeader label="Entity" />
+                      <ColumnHeader
+                        label="Presidio requirement"
+                        tooltip="Required makes Presidio mandatory for all protected requests. Optional adds no requirement by itself."
+                      />
+                      <ColumnHeader label="Enforcement Mode" />
+                      <ColumnHeader
+                        label="Minimum Score"
+                        tooltip={presidioScorePolicyIntro(
+                          data.presidio?.semanticScoreFixed,
+                          data.presidio?.defaultMinConfidence,
+                        )}
+                      />
+                    </tr>
+                  </thead>
+                  <tbody>{semantic.map(integratedEntityRow)}</tbody>
+                </table>
+              </div>
             )}
           </Section>
 
@@ -612,8 +709,8 @@ export function VardeVernPage() {
               </div>
             )}
             <p className="mt-3 text-xs text-(--cui-color-text-muted)">
-              These types are visible only. Varde Vern does not request or act on them. Integration requires
-              mapping, policy, language support, tests and an approved quality gate.
+              These types are visible only. Varde Vern does not request or act on them. Integration
+              requires mapping, policy, language support, tests and an approved quality gate.
             </p>
           </Section>
 
@@ -633,7 +730,8 @@ export function VardeVernPage() {
       )}
 
       <p className="text-xs text-(--cui-color-text-muted)">
-        Default action for unlisted entities: <Badge tone={actionTone(policy.defaultAction)}>{policy.defaultAction}</Badge>
+        Default action for unlisted entities:{' '}
+        <Badge tone={actionTone(policy.defaultAction)}>{policy.defaultAction}</Badge>
       </p>
     </div>
   );

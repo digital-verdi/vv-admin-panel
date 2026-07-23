@@ -51,6 +51,9 @@ const CONFIGURED: t.PresidioStatus = {
   lastProbeAt: null,
   lastProbeLatencyMs: null,
   supportedEntities: ['PERSON', 'LOCATION'],
+  nlpEngine: 'spaCy (SpacyRecognizer)',
+  localEngine: 'Regex, Checksums (handles structural identifiers)',
+  inactiveModules: ['Transformers', 'Stanza', 'Pattern recognizers', 'Deny/Allow-lists'],
 };
 
 function renderPanel(
@@ -96,6 +99,20 @@ describe('PresidioPanel', () => {
     expect(screen.getByText('managed')).toBeInTheDocument();
     expect(screen.getByText('nb, en')).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/http|X-Auth-Token|Bearer/i);
+  });
+
+  it('renders the dynamic engine capabilities (NLP engine, local PII engine, inactive modules) in the status card', () => {
+    renderPanel(CONFIGURED, { canManage: true });
+    const nlpRow = screen.getByText('NLP Engine').closest('div')!;
+    expect(within(nlpRow).getByText('spaCy (SpacyRecognizer)')).toBeInTheDocument();
+    const localRow = screen.getByText('Local PII engine').closest('div')!;
+    expect(
+      within(localRow).getByText('Regex, Checksums (handles structural identifiers)'),
+    ).toBeInTheDocument();
+    const modulesRow = screen.getByText('Inactive modules').closest('div')!;
+    expect(
+      within(modulesRow).getByText('Transformers, Stanza, Pattern recognizers, Deny/Allow-lists'),
+    ).toBeInTheDocument();
   });
 
   it('test studio: Analyze calls the admin API and renders offsets/scores + local span marking', async () => {

@@ -170,6 +170,9 @@ export function PresidioPanel({
         <StatusRow label="Image" value={`${status.imageMode ?? 'unknown'} · ${status.release ?? 'unknown'}`} />
         <StatusRow label="Digest" value={status.digest ?? 'unknown'} />
         <StatusRow label="Languages" value={(status.languages ?? [status.language]).filter(Boolean).join(', ') || '—'} />
+        <StatusRow label="NLP Engine" value={status.nlpEngine ?? '—'} />
+        <StatusRow label="Local PII engine" value={status.localEngine ?? '—'} />
+        <StatusRow label="Inactive modules" value={(status.inactiveModules ?? []).join(', ') || '—'} />
         <StatusRow
           label="Supported entities"
           value={(status.supportedEntities ?? []).join(', ') || '—'}

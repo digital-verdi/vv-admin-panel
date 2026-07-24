@@ -264,6 +264,37 @@ export const vardeVernQueryOptions = queryOptions({
   staleTime: 15_000,
 });
 
+/** The Insight report windows the panel offers — validated server-side so a hand-crafted query cannot
+ *  request an arbitrary (unbounded) range from the proxy. Defaults to 30 when omitted. */
+const insightInputSchema = z.object({
+  days: z
+    .number()
+    .int()
+    .refine((d): d is 7 | 14 | 30 => d === 7 || d === 14 || d === 30, {
+      message: 'days must be one of 7, 14, or 30',
+    })
+    .default(30),
+});
+
+export const getVardeVernInsightFn = createServerFn({ method: 'GET' })
+  .inputValidator(insightInputSchema)
+  .handler(async ({ data }): Promise<t.VardeVernInsight> => {
+    // Reads are ACCESS_ADMIN — every admin may see protection telemetry, not only config managers.
+    await requireCapability(SystemCapabilities.ACCESS_ADMIN);
+    const response = await proxyFetch(`/admin/varde-vern/insight?days=${data.days}`);
+    if (!response.ok) {
+      await extractProxyError(response, 'Failed to load Varde Vern insight');
+    }
+    return (await response.json()) as t.VardeVernInsight;
+  });
+
+export const vardeVernInsightQueryOptions = (days: number) =>
+  queryOptions({
+    queryKey: ['varde-vern-insight', days],
+    queryFn: () => getVardeVernInsightFn({ data: { days } }),
+    staleTime: 15_000,
+  });
+
 const vernActionSchema = z.enum(['block', 'enforce', 'shadow', 'allow']);
 const saveVardeVernSchema = z.object({
   expectedRevision: z.number().int().min(0),

@@ -143,3 +143,79 @@ export interface VardeVern {
 export type SaveVardeVernResult =
   | { status: 'ok'; configRevision: number }
   | { status: 'version-mismatch' };
+
+/**
+ * The Varde Vern Insight report — protection telemetry aggregated over a rolling window, served by the
+ * proxy `GET /admin/varde-vern/insight?days=N`. `ok` carries full KPIs + series/entities/rules;
+ * `disabled` (pipeline off) and `unavailable` (no metrics backend) return null KPIs + empty arrays.
+ */
+export type VardeVernInsightStatus = 'ok' | 'disabled' | 'unavailable';
+
+/** The rolling reporting window. `since` (an ISO timestamp) is present only when `status === 'ok'`. */
+export interface VardeVernInsightWindow {
+  days: number;
+  since?: string;
+}
+
+/** Headline counters for the window. Null unless `status === 'ok'`. `protectedSpans` = masked ∪ blocked
+ *  spans; `shadowSpans` = spans a shadow rule WOULD have acted on. */
+export interface VardeVernInsightKpis {
+  requestsInspected: number;
+  requestsWithFindings: number;
+  protectedSpans: number;
+  shadowSpans: number;
+  requestsWithShadow: number;
+  requestsBlocked: number;
+}
+
+/** One day of the protection-activity series (`day` = `YYYY-MM-DD`). */
+export interface VardeVernInsightSeriesPoint {
+  day: string;
+  inspected: number;
+  enforced: number;
+  shadow: number;
+  blocked: number;
+}
+
+/** Per-entity findings rollup. `piiType` is the internal ALL-CAPS code; `label` is a backend display name
+ *  (the panel prefers `entityDisplayName(piiType)` for body text). */
+export interface VardeVernInsightEntity {
+  piiType: string;
+  label: string;
+  enforceRequests: number;
+  enforceSpans: number;
+  shadowRequests: number;
+  shadowSpans: number;
+  wouldMask: number;
+  wouldBlock: number;
+}
+
+/** Per-rule activity. `source` distinguishes the authoritative local regex from the Presidio NER engine;
+ *  `minConfidence` is present only for `ner` rules. `matchRate` is a 0–1 fraction. */
+export interface VardeVernInsightRule {
+  ruleId: string;
+  piiType: string;
+  label: string;
+  mode: 'enforce' | 'shadow' | 'off';
+  source: 'regex' | 'ner';
+  active: boolean;
+  requestActivations: number;
+  matchCount: number;
+  shadowRequestActivations: number;
+  shadowMatchCount: number;
+  wouldMaskCount: number;
+  wouldBlockCount: number;
+  blockActivations: number;
+  matchRate: number;
+  minConfidence?: number;
+}
+
+export interface VardeVernInsight {
+  status: VardeVernInsightStatus;
+  scope: 'tenant';
+  window: VardeVernInsightWindow;
+  kpis: VardeVernInsightKpis | null;
+  series: VardeVernInsightSeriesPoint[];
+  entities: VardeVernInsightEntity[];
+  rules: VardeVernInsightRule[];
+}

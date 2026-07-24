@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Icon } from '@clickhouse/click-ui';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import type { ReactNode } from 'react';
 import type { MarkSpan } from './SpanMarker';
 import type { Tone } from './operations';
 import type * as t from '@/types';
@@ -9,14 +8,9 @@ import { SelectField, TextareaField } from '@/components/configuration/fields';
 import { testPresidioFn, refreshPresidioFn } from '@/server';
 import { PresidioScoreField } from './PresidioScoreField';
 import { entityDisplayName, formatPresidioScore } from './operations';
+import { Chip, StatusRow } from './ui';
 import { SpanMarker } from './SpanMarker';
-import { cn, notifyError } from '@/utils';
-
-const TONE_CLASS: Record<Tone, string> = {
-  protective: 'bg-(--cui-color-background-success) text-(--cui-color-text-success)',
-  measuring: 'bg-(--cui-color-background-accent-muted) text-(--cui-color-text-accent)',
-  inactive: 'bg-(--cui-color-background-muted) text-(--cui-color-text-muted)',
-};
+import { notifyError } from '@/utils';
 
 const LANGUAGE_OPTIONS: t.SelectOption[] = [
   { label: 'Norwegian (nb)', value: 'nb' },
@@ -37,28 +31,6 @@ const STATE_TONE: Record<string, Tone> = {
   unavailable: 'inactive',
   unknown: 'inactive',
 };
-
-function Chip({ tone, children }: { tone: Tone; children: ReactNode }) {
-  return (
-    <span
-      className={cn(
-        'inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium',
-        TONE_CLASS[tone],
-      )}
-    >
-      {children}
-    </span>
-  );
-}
-
-function StatusRow({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div className="flex items-center justify-between gap-4 py-1 text-sm">
-      <span className="text-(--cui-color-text-muted)">{label}</span>
-      <span className="font-mono text-xs break-all text-(--cui-color-text-default)">{value}</span>
-    </div>
-  );
-}
 
 export interface PresidioPanelProps {
   status?: t.PresidioStatus;

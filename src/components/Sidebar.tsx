@@ -43,6 +43,13 @@ const navItems: t.NavItem[] = [
     capability: SystemCapabilities.READ_CONFIGS,
   },
   // Varde Vern is a tab inside LLM Router (not a separate sidebar entry); /varde-vern redirects there.
+  // Security insight is reachable by every admin (ACCESS_ADMIN), not only READ_CONFIGS holders.
+  {
+    labelKey: 'com_nav_security_insight',
+    path: '/security-insight',
+    icon: 'secure',
+    capability: SystemCapabilities.ACCESS_ADMIN,
+  },
   { labelKey: 'com_nav_grants', path: '/grants', icon: 'lock' },
   { labelKey: 'com_nav_help', path: '/help', icon: 'question' },
 ];
@@ -101,7 +108,11 @@ export function Sidebar({ user, collapsed, onToggle }: t.SidebarProps) {
       >
         <div className="flex h-14 shrink-0 items-center px-2">
           <div className="flex items-center gap-2.5 overflow-hidden px-1.5">
-            <img src={libreChatLogo} alt={localize('com_a11y_logo_alt')} className="h-6 w-6 shrink-0" />
+            <img
+              src={libreChatLogo}
+              alt={localize('com_a11y_logo_alt')}
+              className="h-6 w-6 shrink-0"
+            />
             <span className="truncate text-sm font-semibold text-(--cui-color-text-default)">
               {localize('com_auth_title')}
             </span>

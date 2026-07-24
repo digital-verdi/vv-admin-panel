@@ -117,6 +117,7 @@
     "@tanstack/start-server-core": "1.167.9",
     "@tanstack/start-storage-context": "1.166.23",
     "@tanstack/store": "0.9.3",
-    "@tanstack/virtual-file-routes": "1.161.7"
+    "@tanstack/virtual-file-routes": "1.161.7",
+    "postcss": "8.5.15"
   }
 }

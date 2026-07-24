@@ -28,7 +28,7 @@ function LlmRouterRoute() {
         onValueChange={(value) => {
           if (isTab(value)) navigate({ search: { tab: value } });
         }}
-        ariaLabel="LLM Router"
+        ariaLabel="Varde Rute"
       >
         <Tabs.TriggersList>
           <Tabs.Trigger value="routing">Routing &amp; models</Tabs.Trigger>

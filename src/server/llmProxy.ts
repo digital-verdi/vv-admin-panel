@@ -217,7 +217,7 @@ export const getLlmProxyConfigFn = createServerFn({ method: 'GET' }).handler(
     await requireCapability(SystemCapabilities.READ_CONFIGS);
     const response = await proxyFetch('/admin/config');
     if (!response.ok) {
-      await extractProxyError(response, 'Failed to load LLM Router config');
+      await extractProxyError(response, 'Failed to load Varde Rute config');
     }
     return normalizeProxyConfig(await response.json());
   },
@@ -414,7 +414,7 @@ export const saveLlmProxyConfigFn = createServerFn({ method: 'POST' })
       }
     }
     if (!response.ok) {
-      await extractProxyError(response, 'Failed to save LLM Router config');
+      await extractProxyError(response, 'Failed to save Varde Rute config');
     }
     const body = (await response.json().catch(() => ({}))) as { configRevision?: number };
     return {

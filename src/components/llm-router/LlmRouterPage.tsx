@@ -131,7 +131,7 @@ export function LlmRouterPage() {
     return isError ? (
       <div className="p-6">
         <EmptyState
-          message={error instanceof Error ? error.message : 'Failed to load LLM Router config.'}
+          message={error instanceof Error ? error.message : 'Failed to load Varde Rute config.'}
         />
       </div>
     ) : (
@@ -242,7 +242,7 @@ export function LlmRouterPage() {
       await queryClient.invalidateQueries({ queryKey: ['llm-proxy-config'] });
       await runLibreChatSync(groups, chatRouting.defaultGroupId);
     } catch (err) {
-      notifyError(err instanceof Error ? err.message : 'Failed to save LLM Router config');
+      notifyError(err instanceof Error ? err.message : 'Failed to save Varde Rute config');
     } finally {
       setBusy(false);
     }
@@ -251,13 +251,13 @@ export function LlmRouterPage() {
   return (
     <div
       role="region"
-      aria-label="LLM Router"
+      aria-label="Varde Rute"
       className="flex flex-1 flex-col gap-6 overflow-auto p-6"
     >
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm text-(--cui-color-text-muted)">
-          Configure the Varde LLM proxy (OpenRouter egress, chat-model groups, PII
-          pseudonymization). Changes take effect live on save — no redeploy.
+          Configure Varde Rute — AI providers, chat-model routing and Varde Vern. Changes take
+          effect live on save — no redeploy.
         </p>
         <span
           className={
@@ -520,7 +520,7 @@ export function LlmRouterPage() {
         onClose={() => setVersionConflict(false)}
       >
         <p className="text-sm text-(--cui-color-text-default)">
-          The LLM Router config was changed by another writer. We reloaded the latest version —
+          The Varde Rute config was changed by another writer. We reloaded the latest version —
           review your changes and save again.
         </p>
       </FormDialog>

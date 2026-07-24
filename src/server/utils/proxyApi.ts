@@ -10,7 +10,9 @@ export async function proxyFetch(path: string, init?: RequestInit): Promise<Resp
   const baseUrl = process.env.VV_LLM_PROXY_BASE_URL;
   const adminKey = process.env.VV_LLM_PROXY_ADMIN_KEY;
   if (!baseUrl || !adminKey) {
-    throw new Error('LLM Router config is unavailable (VV_LLM_PROXY_BASE_URL / VV_LLM_PROXY_ADMIN_KEY not set)');
+    throw new Error(
+      'Varde Rute config is unavailable (VV_LLM_PROXY_BASE_URL / VV_LLM_PROXY_ADMIN_KEY not set)',
+    );
   }
   return fetch(`${baseUrl}${path}`, {
     ...init,

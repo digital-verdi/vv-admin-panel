@@ -42,14 +42,8 @@ const navItems: t.NavItem[] = [
     icon: 'git-merge',
     capability: SystemCapabilities.READ_CONFIGS,
   },
-  // Varde Vern is a tab inside LLM Router (not a separate sidebar entry); /varde-vern redirects there.
-  // Security insight is reachable by every admin (ACCESS_ADMIN), not only READ_CONFIGS holders.
-  {
-    labelKey: 'com_nav_security_insight',
-    path: '/security-insight',
-    icon: 'secure',
-    capability: SystemCapabilities.ACCESS_ADMIN,
-  },
+  // Varde Vern — and its Insight tab — live inside the Varde Rute page (not separate sidebar entries);
+  // /varde-vern redirects there. The Insight dashboard is reached via Varde Rute › Varde Vern › Insight.
   { labelKey: 'com_nav_grants', path: '/grants', icon: 'lock' },
   { labelKey: 'com_nav_help', path: '/help', icon: 'question' },
 ];

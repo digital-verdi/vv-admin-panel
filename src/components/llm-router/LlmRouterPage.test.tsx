@@ -103,6 +103,12 @@ describe('LlmRouterPage — AI Providers grouping', () => {
     expect(screen.getByRole('heading', { name: 'Chat model groups' })).toBeInTheDocument();
   });
 
+  it('brands the page region as "Varde Rute" (not "LLM Router")', async () => {
+    renderPage();
+    expect(await screen.findByRole('region', { name: 'Varde Rute' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'LLM Router' })).toBeNull();
+  });
+
   it('keeps the provider cards below the group heading (OpenRouter/Mistral are h3, AI Providers is h2)', async () => {
     renderPage();
     const groupHeading = await screen.findByRole('heading', { name: 'AI Providers' });

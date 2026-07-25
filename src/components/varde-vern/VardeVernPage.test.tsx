@@ -69,7 +69,7 @@ const mockVern: t.VardeVern = {
   },
   rollout: [
     { engineId: 'regex', status: 'required', rolloutPhase: 'enforce', enforceAllowed: true },
-    { engineId: 'presidio', status: 'optional', rolloutPhase: 'shadow', enforceAllowed: false },
+    { engineId: 'presidio', status: 'optional', rolloutPhase: 'shadow', enforceAllowed: true },
   ],
   enforceableGreen: [
     { entity: 'PERSON', language: 'nb' },
@@ -568,7 +568,7 @@ describe('VardeVernPage — table redesign + English-only UI', () => {
       ...mockVern,
       rollout: [
         { engineId: 'regex', status: 'required', rolloutPhase: 'enforce', enforceAllowed: true },
-        { engineId: 'presidio', status: 'required', rolloutPhase: 'shadow', enforceAllowed: false },
+        { engineId: 'presidio', status: 'required', rolloutPhase: 'shadow', enforceAllowed: true },
       ],
     };
     renderPage();
@@ -578,12 +578,50 @@ describe('VardeVernPage — table redesign + English-only UI', () => {
     expect(within(phaseSelect).getByRole('option', { name: 'Shadow' })).toBeInTheDocument();
   });
 
+  it('ADR 0021: offers the global Enforce rollout mode when Presidio is enforce-eligible (derived enforceAllowed=true)', async () => {
+    // The default mock has presidio.enforceAllowed=true (PERSON is corpus-green), so Enforce is offered and
+    // no enforce-availability gate tooltip is shown.
+    renderPage();
+    await openPresidioTab();
+    const phaseSelect = await screen.findByLabelText('Presidio rollout mode');
+    expect(within(phaseSelect).getByRole('option', { name: 'Enforce' })).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        /Enforce becomes available once at least one entity and language passes the corpus quality gate/,
+      ),
+    ).toBeNull();
+  });
+
+  it('ADR 0021: hides the global Enforce rollout mode when Presidio is NOT enforce-eligible (enforceAllowed=false) and explains the gate', async () => {
+    queryValue = {
+      ...mockVern,
+      rollout: [
+        { engineId: 'regex', status: 'required', rolloutPhase: 'enforce', enforceAllowed: true },
+        { engineId: 'presidio', status: 'optional', rolloutPhase: 'shadow', enforceAllowed: false },
+      ],
+    };
+    renderPage();
+    await openPresidioTab();
+    const phaseSelect = await screen.findByLabelText('Presidio rollout mode');
+    // Enforce is filtered out — the panel never offers a mode the backend would reject.
+    expect(within(phaseSelect).queryByRole('option', { name: 'Enforce' })).toBeNull();
+    // Off + Shadow remain fully available.
+    expect(within(phaseSelect).getByRole('option', { name: 'Off' })).toBeInTheDocument();
+    expect(within(phaseSelect).getByRole('option', { name: 'Shadow' })).toBeInTheDocument();
+    // …and the gate is explained via the enforce-availability tooltip.
+    expect(
+      screen.getByText(
+        /Enforce becomes available once at least one entity and language passes the corpus quality gate/,
+      ),
+    ).toBeInTheDocument();
+  });
+
   it('a loaded Required+Off Presidio config (engine status) surfaces the hoisted top-level alert and disables Save', async () => {
     queryValue = {
       ...mockVern,
       rollout: [
         { engineId: 'regex', status: 'required', rolloutPhase: 'enforce', enforceAllowed: true },
-        { engineId: 'presidio', status: 'required', rolloutPhase: 'off', enforceAllowed: false },
+        { engineId: 'presidio', status: 'required', rolloutPhase: 'off', enforceAllowed: true },
       ],
     };
     renderPage();
@@ -612,7 +650,7 @@ describe('VardeVernPage — table redesign + English-only UI', () => {
       },
       rollout: [
         { engineId: 'regex', status: 'required', rolloutPhase: 'enforce', enforceAllowed: true },
-        { engineId: 'presidio', status: 'optional', rolloutPhase: 'off', enforceAllowed: false },
+        { engineId: 'presidio', status: 'optional', rolloutPhase: 'off', enforceAllowed: true },
       ],
     };
     renderPage();
@@ -628,7 +666,7 @@ describe('VardeVernPage — table redesign + English-only UI', () => {
       ...mockVern,
       rollout: [
         { engineId: 'regex', status: 'required', rolloutPhase: 'enforce', enforceAllowed: true },
-        { engineId: 'presidio', status: 'optional', rolloutPhase: 'off', enforceAllowed: false },
+        { engineId: 'presidio', status: 'optional', rolloutPhase: 'off', enforceAllowed: true },
       ],
     };
     renderPage();
@@ -648,7 +686,7 @@ describe('VardeVernPage — table redesign + English-only UI', () => {
       ...mockVern,
       rollout: [
         { engineId: 'regex', status: 'required', rolloutPhase: 'enforce', enforceAllowed: true },
-        { engineId: 'presidio', status: 'optional', rolloutPhase: 'off', enforceAllowed: false },
+        { engineId: 'presidio', status: 'optional', rolloutPhase: 'off', enforceAllowed: true },
       ],
     };
     renderPage();
@@ -690,7 +728,7 @@ describe('VardeVernPage — table redesign + English-only UI', () => {
       ...mockVern,
       rollout: [
         { engineId: 'regex', status: 'required', rolloutPhase: 'enforce', enforceAllowed: true },
-        { engineId: 'presidio', status: 'optional', rolloutPhase: 'shadow', enforceAllowed: false },
+        { engineId: 'presidio', status: 'optional', rolloutPhase: 'shadow', enforceAllowed: true },
       ],
     };
     renderPage();

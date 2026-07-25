@@ -16,7 +16,7 @@ import {
 } from './operations';
 import { SelectField, NumberField } from '@/components/configuration/fields';
 import { vardeVernQueryOptions, saveVardeVernFn } from '@/server';
-import { Section, Badge, ColumnHeader, HelpTooltip } from './ui';
+import { Section, Badge, ColumnHeader, HelpTooltip, StatusRow } from './ui';
 import { EmptyState, LoadingState } from '@/components/shared';
 import { notifySuccess, notifyError } from '@/utils';
 import { SystemCapabilities } from '@/constants';
@@ -181,6 +181,20 @@ export function VardeVernPage() {
   const presidioPhaseOptions = presidioEnforceAllowed
     ? basePhaseOptions
     : basePhaseOptions.filter((o) => o.value !== 'enforce');
+  // Live "which entity + language is enforce-eligible right now" — sourced from the backend green set so the
+  // help text never goes stale as new entities/languages pass the corpus gate.
+  const greenByEntity = new Map<string, Set<string>>();
+  for (const g of data.enforceableGreen ?? []) {
+    (greenByEntity.get(g.entity) ?? greenByEntity.set(g.entity, new Set()).get(g.entity)!).add(
+      g.language,
+    );
+  }
+  const enforceEligibleSummary =
+    greenByEntity.size === 0
+      ? 'none yet'
+      : [...greenByEntity.entries()]
+          .map(([e, langs]) => `${entityDisplayName(e)} (${[...langs].sort().join(', ')})`)
+          .join(' · ');
   // Mirror ALL THREE of the server's requiredEnginesSatisfiable rejection branches (routes.ts): a required
   // Presidio is invalid when it has no rollout entry, is disabled, or is Off — so the client blocks every
   // state the backend would 400 on, not just the disabled/off ones.
@@ -655,6 +669,60 @@ export function VardeVernPage() {
                 </table>
               </div>
             )}
+            <details className="mt-4 rounded-lg border border-(--cui-color-stroke-default) p-3">
+              <summary className="cursor-pointer text-sm font-medium text-(--cui-color-text-default)">
+                Detection and quality
+              </summary>
+              <div className="mt-3 flex flex-col gap-3 text-xs text-(--cui-color-text-muted)">
+                <p>
+                  Person, Location and Organization findings are produced by pinned spaCy language models and
+                  version-controlled Presidio recognizers. The settings on this page determine how detected
+                  findings are <em>handled</em> — changing Enforcement Mode does not change detector accuracy.
+                </p>
+                <div className="flex flex-col gap-1">
+                  {data.presidio?.nlpEngine && (
+                    <StatusRow label="NLP engine" value={data.presidio.nlpEngine} />
+                  )}
+                  {data.presidio?.languages && data.presidio.languages.length > 0 && (
+                    <StatusRow label="Analyzer languages" value={data.presidio.languages.join(', ')} />
+                  )}
+                  <StatusRow label="Enforce-eligible now" value={enforceEligibleSummary} />
+                  {data.presidio?.release && (
+                    <StatusRow label="Analyzer image" value={data.presidio.release} />
+                  )}
+                </div>
+                <div>
+                  <p className="font-medium text-(--cui-color-text-default)">Detection configuration</p>
+                  <ul className="ml-4 mt-1 list-disc space-y-0.5 font-mono">
+                    <li>services/presidio-analyzer/config/recognizers.yaml — recognizers</li>
+                    <li>services/presidio-analyzer/config/nlp.yaml — spaCy models + entity mapping</li>
+                    <li>
+                      services/presidio-analyzer/Dockerfile · model.lock.json · nb-requirements.txt — pinned
+                      image + models
+                    </li>
+                    <li>services/vv-llm-proxy/src/policy/enforceable-green.ts — runtime enforce gate</li>
+                  </ul>
+                </div>
+                <div>
+                  <p className="font-medium text-(--cui-color-text-default)">Quality evaluation</p>
+                  <ul className="ml-4 mt-1 list-disc space-y-0.5 font-mono">
+                    <li>services/presidio-analyzer/corpus/nb.json · en.json — synthetic test corpus (nb / en)</li>
+                    <li>services/presidio-analyzer/corpus/gates.json — quality requirements (recall / precision / F₂)</li>
+                    <li>services/presidio-analyzer/scripts/eval-corpus.mjs — corpus evaluation + green-set check</li>
+                    <li>
+                      services/presidio-analyzer/corpus/enforceable-green.json — documented-green (entity,
+                      language) set
+                    </li>
+                    <li>services/presidio-analyzer/scripts/gen-corpus.mjs — corpus generator (exact offsets)</li>
+                  </ul>
+                </div>
+                <p>
+                  Enforce becomes available for an entity and language only after its measured detection
+                  quality passes the corpus gate. Improving detection is a reviewed code change to the pinned
+                  image + recognizers behind that gate — it cannot be done from this page.
+                </p>
+              </div>
+            </details>
           </Section>
 
           <Section

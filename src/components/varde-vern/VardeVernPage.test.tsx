@@ -43,7 +43,7 @@ const mockVern: t.VardeVern = {
       engine: 'semantic',
       confidenceApplicable: true,
       action: 'shadow',
-      enforceGreenLanguages: [],
+      enforceGreenLanguages: ['nb', 'en'],
       scoreModel: 'spacy-ner-fixed',
       semanticFixedScore: 0.85,
     },
@@ -53,7 +53,7 @@ const mockVern: t.VardeVern = {
       engine: 'semantic',
       confidenceApplicable: true,
       action: 'shadow',
-      enforceGreenLanguages: [],
+      enforceGreenLanguages: ['nb', 'en'],
       scoreModel: 'spacy-ner-fixed',
       semanticFixedScore: 0.85,
     },
@@ -74,6 +74,10 @@ const mockVern: t.VardeVern = {
   enforceableGreen: [
     { entity: 'PERSON', language: 'nb' },
     { entity: 'PERSON', language: 'en' },
+    { entity: 'LOCATION', language: 'nb' },
+    { entity: 'LOCATION', language: 'en' },
+    { entity: 'ORG', language: 'nb' },
+    { entity: 'ORG', language: 'en' },
   ],
   presidio: {
     configured: true,
@@ -343,8 +347,10 @@ describe('VardeVernPage — table redesign + English-only UI', () => {
     expect(
       within(integrated).getByText(/Configure how Varde Vern handles specific data types/),
     ).toBeInTheDocument();
-    // The Off / Shadow / Enforce ceiling rules render as a real <ul><li> list (three items).
-    expect(within(integrated).getAllByRole('listitem')).toHaveLength(3);
+    // The Off / Shadow / Enforce ceiling rules render as a real <ul><li> list (three items). Scope to the
+    // first list — the Detection and quality section below adds its own file-reference lists.
+    const ceilingList = within(integrated).getAllByRole('list')[0]!;
+    expect(within(ceilingList).getAllByRole('listitem')).toHaveLength(3);
     expect(
       within(integrated).getByText(/All data types are ignored, regardless of their setting/),
     ).toBeInTheDocument();
@@ -403,10 +409,14 @@ describe('VardeVernPage — table redesign + English-only UI', () => {
   it('Enforcement Mode → Enforce auto-sets enforceLanguages to the green languages and shows them muted', async () => {
     renderPage();
     const integrated = await openPresidioTab();
+    const personRow = within(integrated)
+      .getByLabelText('Person enforcement mode')
+      .closest('tr')!;
     fireEvent.change(within(integrated).getByLabelText('Person enforcement mode'), {
       target: { value: 'enforce' },
     });
-    expect(within(integrated).getByText('nb, en')).toBeInTheDocument();
+    // Scope to the Person row — the Detection section's "Analyzer languages" row also shows "nb, en".
+    expect(within(personRow).getByText('nb, en')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(saveFn).toHaveBeenCalledTimes(1));
     expect(savedPolicy().entities.PERSON!.action).toBe('enforce');
@@ -424,18 +434,50 @@ describe('VardeVernPage — table redesign + English-only UI', () => {
     expect(savedPolicy().entities.PERSON!.minConfidence).toBe(0.55);
   });
 
-  it('offers Enforce only for a green entity; non-green omits it with the quality-gate tooltip', async () => {
+  it('offers Enforce for every green entity (Person, Location, Organization) — no quality-gate tooltip', async () => {
+    // Default mock: PERSON, LOCATION and ORG are all green (nb+en) → each offers Enforce (ADR 0022).
     renderPage();
     const integrated = await openPresidioTab();
-    const personSelect = within(integrated).getByLabelText('Person enforcement mode');
-    expect(within(personSelect).getByRole('option', { name: 'Enforce' })).toBeInTheDocument();
+    for (const name of ['Person', 'Location', 'Organization']) {
+      const select = within(integrated).getByLabelText(`${name} enforcement mode`);
+      expect(within(select).getByRole('option', { name: 'Enforce' })).toBeInTheDocument();
+    }
+    expect(within(integrated).queryByText('Enforce needs approved quality tests.')).toBeNull();
+  });
+
+  it('a non-green entity still omits Enforce with the quality-gate tooltip (gate logic intact)', async () => {
+    // Force LOCATION back to no green languages to prove the per-entity gate still hides Enforce.
+    queryValue = {
+      ...mockVern,
+      entities: mockVern.entities.map((e) =>
+        e.entityType === 'LOCATION' ? { ...e, enforceGreenLanguages: [] } : e,
+      ),
+      enforceableGreen: mockVern.enforceableGreen!.filter((g) => g.entity !== 'LOCATION'),
+    };
+    renderPage();
+    const integrated = await openPresidioTab();
     const locationSelect = within(integrated).getByLabelText('Location enforcement mode');
     expect(within(locationSelect).queryByRole('option', { name: 'Enforce' })).toBeNull();
-    const orgSelect = within(integrated).getByLabelText('Organization enforcement mode');
-    expect(within(orgSelect).queryByRole('option', { name: 'Enforce' })).toBeNull();
-    expect(within(integrated).getAllByText('Enforce needs approved quality tests.')).toHaveLength(
-      2,
-    );
+    expect(
+      within(integrated).getByText('Enforce needs approved quality tests.'),
+    ).toBeInTheDocument();
+  });
+
+  it('the Detection and quality section renders backend facts + the config/corpus file references', async () => {
+    renderPage();
+    const integrated = await openPresidioTab();
+    expect(within(integrated).getByText('Detection and quality')).toBeInTheDocument();
+    // Live enforce-eligible summary sourced from the backend green set (never a hardcoded list).
+    expect(within(integrated).getByText('Enforce-eligible now')).toBeInTheDocument();
+    expect(
+      within(integrated).getByText(/Person \(en, nb\).*Location \(en, nb\).*Organization \(en, nb\)/),
+    ).toBeInTheDocument();
+    // Backend-sourced analyzer languages + a couple of the documented file references.
+    expect(within(integrated).getByText('Analyzer languages')).toBeInTheDocument();
+    expect(
+      within(integrated).getByText(/config\/recognizers\.yaml/),
+    ).toBeInTheDocument();
+    expect(within(integrated).getByText(/corpus\/gates\.json/)).toBeInTheDocument();
   });
 
   it('the Presidio rollout status (optional/required) is editable and round-trips', async () => {

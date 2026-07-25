@@ -28,6 +28,7 @@ const mockVern: t.VardeVern = {
     },
     {
       entityType: 'PERSON',
+      recognizers: ['spaCy NER'],
       label: 'Person name',
       engine: 'semantic',
       confidenceApplicable: true,
@@ -39,6 +40,7 @@ const mockVern: t.VardeVern = {
     },
     {
       entityType: 'LOCATION',
+      recognizers: ['spaCy NER', 'GPE label mapping'],
       label: 'Sted',
       engine: 'semantic',
       confidenceApplicable: true,
@@ -49,6 +51,12 @@ const mockVern: t.VardeVern = {
     },
     {
       entityType: 'ORG',
+      recognizers: [
+        'spaCy NER',
+        'Legal-form recognizer',
+        'Public-body recognizer',
+        'Context scoring',
+      ],
       label: 'Organisasjon',
       engine: 'semantic',
       confidenceApplicable: true,
@@ -272,10 +280,13 @@ describe('VardeVernPage — table redesign + English-only UI', () => {
     expect(panel).toHaveAttribute('data-can-manage', 'true');
   });
 
-  it('renders the five table columns: Entity | Presidio requirement | Enforcement Mode | Minimum Score | Effective outcome', async () => {
+  it('renders the six table columns: Entity | Recognizers | Presidio requirement | Enforcement Mode | Minimum Score | Effective outcome', async () => {
     renderPage();
     const integrated = await openPresidioTab();
     expect(within(integrated).getByRole('columnheader', { name: 'Entity' })).toBeInTheDocument();
+    expect(
+      within(integrated).getByRole('columnheader', { name: /Recognizers/ }),
+    ).toBeInTheDocument();
     // "Presidio requirement", "Minimum Score" and "Effective outcome" carry help tooltips, so the header's
     // accessible name also includes the trigger/tooltip copy — match on the label substring.
     expect(
@@ -310,6 +321,23 @@ describe('VardeVernPage — table redesign + English-only UI', () => {
     expect(within(integrated).queryByText('PERSON')).toBeNull();
     expect(within(integrated).queryByText('LOCATION')).toBeNull();
     expect(within(integrated).queryByText('ORG')).toBeNull();
+  });
+
+  it('the Recognizers column shows the backend-sourced detection mechanisms per entity', async () => {
+    renderPage();
+    const integrated = await openPresidioTab();
+    const rowOf = (name: string) =>
+      within(integrated).getByLabelText(`${name} enforcement mode`).closest('tr')!;
+    // Mock (backend-sourced): PERSON=spaCy NER; LOCATION adds the GPE label mapping; ORG adds the pattern
+    // recognizers + context scoring — one chip per mechanism, scoped to each entity row.
+    expect(within(rowOf('Person')).getByText('spaCy NER')).toBeInTheDocument();
+    const locRow = rowOf('Location');
+    expect(within(locRow).getByText('spaCy NER')).toBeInTheDocument();
+    expect(within(locRow).getByText('GPE label mapping')).toBeInTheDocument();
+    const orgRow = rowOf('Organization');
+    expect(within(orgRow).getByText('Legal-form recognizer')).toBeInTheDocument();
+    expect(within(orgRow).getByText('Public-body recognizer')).toBeInTheDocument();
+    expect(within(orgRow).getByText('Context scoring')).toBeInTheDocument();
   });
 
   it('the Effective outcome column combines the global Presidio phase with each entity action (proxy ceiling)', async () => {
@@ -409,9 +437,7 @@ describe('VardeVernPage — table redesign + English-only UI', () => {
   it('Enforcement Mode → Enforce auto-sets enforceLanguages to the green languages and shows them muted', async () => {
     renderPage();
     const integrated = await openPresidioTab();
-    const personRow = within(integrated)
-      .getByLabelText('Person enforcement mode')
-      .closest('tr')!;
+    const personRow = within(integrated).getByLabelText('Person enforcement mode').closest('tr')!;
     fireEvent.change(within(integrated).getByLabelText('Person enforcement mode'), {
       target: { value: 'enforce' },
     });
@@ -470,13 +496,13 @@ describe('VardeVernPage — table redesign + English-only UI', () => {
     // Live enforce-eligible summary sourced from the backend green set (never a hardcoded list).
     expect(within(integrated).getByText('Enforce-eligible now')).toBeInTheDocument();
     expect(
-      within(integrated).getByText(/Person \(en, nb\).*Location \(en, nb\).*Organization \(en, nb\)/),
+      within(integrated).getByText(
+        /Person \(en, nb\).*Location \(en, nb\).*Organization \(en, nb\)/,
+      ),
     ).toBeInTheDocument();
     // Backend-sourced analyzer languages + a couple of the documented file references.
     expect(within(integrated).getByText('Analyzer languages')).toBeInTheDocument();
-    expect(
-      within(integrated).getByText(/config\/recognizers\.yaml/),
-    ).toBeInTheDocument();
+    expect(within(integrated).getByText(/config\/recognizers\.yaml/)).toBeInTheDocument();
     expect(within(integrated).getByText(/corpus\/gates\.json/)).toBeInTheDocument();
   });
 

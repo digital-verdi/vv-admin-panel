@@ -285,6 +285,15 @@ export function VardeVernPage() {
           <span className="text-sm font-medium text-(--cui-color-text-default)">{name}</span>
         </td>
         <td className="px-4 py-2.5 align-top">
+          <div className="flex flex-wrap gap-1">
+            {(entity.recognizers ?? []).map((r) => (
+              <Badge key={r} tone="inactive">
+                {r}
+              </Badge>
+            ))}
+          </div>
+        </td>
+        <td className="px-4 py-2.5 align-top">
           <SelectField
             id={`detection-${entity.entityType}`}
             value={detection}
@@ -648,6 +657,10 @@ export function VardeVernPage() {
                     <tr className="border-b border-(--cui-color-stroke-default) bg-(--cui-color-background-muted)">
                       <ColumnHeader label="Entity" />
                       <ColumnHeader
+                        label="Recognizers"
+                        tooltip="The detection mechanisms that produce this entity — pinned spaCy NER, the GPE label mapping and versioned Presidio pattern recognizers. Sourced from the backend; the settings in this table change how findings are handled, not how they are detected."
+                      />
+                      <ColumnHeader
                         label="Presidio requirement"
                         tooltip="Required makes Presidio mandatory for all protected requests. Optional adds no requirement by itself."
                       />
@@ -675,16 +688,20 @@ export function VardeVernPage() {
               </summary>
               <div className="mt-3 flex flex-col gap-3 text-xs text-(--cui-color-text-muted)">
                 <p>
-                  Person, Location and Organization findings are produced by pinned spaCy language models and
-                  version-controlled Presidio recognizers. The settings on this page determine how detected
-                  findings are <em>handled</em> — changing Enforcement Mode does not change detector accuracy.
+                  Person, Location and Organization findings are produced by pinned spaCy language
+                  models and version-controlled Presidio recognizers. The settings on this page
+                  determine how detected findings are <em>handled</em> — changing Enforcement Mode
+                  does not change detector accuracy.
                 </p>
                 <div className="flex flex-col gap-1">
                   {data.presidio?.nlpEngine && (
                     <StatusRow label="NLP engine" value={data.presidio.nlpEngine} />
                   )}
                   {data.presidio?.languages && data.presidio.languages.length > 0 && (
-                    <StatusRow label="Analyzer languages" value={data.presidio.languages.join(', ')} />
+                    <StatusRow
+                      label="Analyzer languages"
+                      value={data.presidio.languages.join(', ')}
+                    />
                   )}
                   <StatusRow label="Enforce-eligible now" value={enforceEligibleSummary} />
                   {data.presidio?.release && (
@@ -692,34 +709,53 @@ export function VardeVernPage() {
                   )}
                 </div>
                 <div>
-                  <p className="font-medium text-(--cui-color-text-default)">Detection configuration</p>
-                  <ul className="ml-4 mt-1 list-disc space-y-0.5 font-mono">
+                  <p className="font-medium text-(--cui-color-text-default)">
+                    Detection configuration
+                  </p>
+                  <ul className="mt-1 ml-4 list-disc space-y-0.5 font-mono">
                     <li>services/presidio-analyzer/config/recognizers.yaml — recognizers</li>
-                    <li>services/presidio-analyzer/config/nlp.yaml — spaCy models + entity mapping</li>
                     <li>
-                      services/presidio-analyzer/Dockerfile · model.lock.json · nb-requirements.txt — pinned
-                      image + models
+                      services/presidio-analyzer/config/nlp.yaml — spaCy models + entity mapping
                     </li>
-                    <li>services/vv-llm-proxy/src/policy/enforceable-green.ts — runtime enforce gate</li>
+                    <li>
+                      services/presidio-analyzer/Dockerfile · model.lock.json · nb-requirements.txt
+                      — pinned image + models
+                    </li>
+                    <li>
+                      services/vv-llm-proxy/src/policy/enforceable-green.ts — runtime enforce gate
+                    </li>
                   </ul>
                 </div>
                 <div>
                   <p className="font-medium text-(--cui-color-text-default)">Quality evaluation</p>
-                  <ul className="ml-4 mt-1 list-disc space-y-0.5 font-mono">
-                    <li>services/presidio-analyzer/corpus/nb.json · en.json — synthetic test corpus (nb / en)</li>
-                    <li>services/presidio-analyzer/corpus/gates.json — quality requirements (recall / precision / F₂)</li>
-                    <li>services/presidio-analyzer/scripts/eval-corpus.mjs — corpus evaluation + green-set check</li>
+                  <ul className="mt-1 ml-4 list-disc space-y-0.5 font-mono">
                     <li>
-                      services/presidio-analyzer/corpus/enforceable-green.json — documented-green (entity,
-                      language) set
+                      services/presidio-analyzer/corpus/nb.json · en.json — synthetic test corpus
+                      (nb / en)
                     </li>
-                    <li>services/presidio-analyzer/scripts/gen-corpus.mjs — corpus generator (exact offsets)</li>
+                    <li>
+                      services/presidio-analyzer/corpus/gates.json — quality requirements (recall /
+                      precision / F₂)
+                    </li>
+                    <li>
+                      services/presidio-analyzer/scripts/eval-corpus.mjs — corpus evaluation +
+                      green-set check
+                    </li>
+                    <li>
+                      services/presidio-analyzer/corpus/enforceable-green.json — documented-green
+                      (entity, language) set
+                    </li>
+                    <li>
+                      services/presidio-analyzer/scripts/gen-corpus.mjs — corpus generator (exact
+                      offsets)
+                    </li>
                   </ul>
                 </div>
                 <p>
-                  Enforce becomes available for an entity and language only after its measured detection
-                  quality passes the corpus gate. Improving detection is a reviewed code change to the pinned
-                  image + recognizers behind that gate — it cannot be done from this page.
+                  Enforce becomes available for an entity and language only after its measured
+                  detection quality passes the corpus gate. Improving detection is a reviewed code
+                  change to the pinned image + recognizers behind that gate — it cannot be done from
+                  this page.
                 </p>
               </div>
             </details>

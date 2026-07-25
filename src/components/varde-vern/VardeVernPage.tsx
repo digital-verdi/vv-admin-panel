@@ -67,6 +67,11 @@ const STATUS_OPTIONS: t.SelectOption[] = [
   { label: 'Optional', value: 'optional' },
   { label: 'Required', value: 'required' },
 ];
+// Enforce ⇒ Required (proxy ADR 0023): an enforcing engine that proceeded on failure would ship the very PII
+// it masks, so the backend normalizes optional+enforce → required. The panel locks the requirement to
+// Required under Enforce (Optional removed) so the control matches the effective behavior. Optional stays
+// available for Off/Shadow, where a measure-only engine's outage must not block traffic.
+const STATUS_OPTIONS_ENFORCE: t.SelectOption[] = STATUS_OPTIONS.filter((o) => o.value === 'required');
 
 // The global Varde Vern status badge — `piiEnabled` is the effective runtime activation from the proxy;
 // `undefined` (older proxy) reads as `unknown` rather than implying either state.
@@ -173,6 +178,9 @@ export function VardeVernPage() {
   const presidioRequired =
     presidioEngine?.status === 'required' ||
     Object.values(policy.entities).some((e) => e.requiredEngines.includes('presidio'));
+  // Enforce ⇒ Required (ADR 0023): the requirement is locked to Required while the engine is enforcing, so
+  // the panel never presents the optional+enforce foot-gun the backend normalizes away.
+  const presidioEnforcePhase = presidioEngine?.rolloutPhase === 'enforce';
   // The global Enforce rollout mode is offered only when Presidio is enforce-ELIGIBLE — the backend-derived
   // `enforceAllowed` (the corpus-green gate, ADR 0021). Mirrors the per-entity `canEnforce` gate so the panel
   // never presents a mode the backend would reject. `off` is separately removed when Presidio is Required.
@@ -547,19 +555,26 @@ export function VardeVernPage() {
                       </strong>{' '}
                       blocks the request entirely, if the Presidio is unavailable.
                     </p>
+                    {presidioEnforcePhase && (
+                      <p className="mt-1 text-xs text-(--cui-color-text-muted)">
+                        Locked to <strong className="font-medium">Required</strong> while Enforce is
+                        active — an enforcing engine must block rather than send unmasked data if it is
+                        unavailable. Switch the rollout mode to Shadow to choose Optional.
+                      </p>
+                    )}
                   </div>
                   <div className="shrink-0">
                     <SelectField
                       id="status-presidio"
-                      value={presidioEngine.status}
-                      options={STATUS_OPTIONS}
+                      value={presidioEnforcePhase ? 'required' : presidioEngine.status}
+                      options={presidioEnforcePhase ? STATUS_OPTIONS_ENFORCE : STATUS_OPTIONS}
                       onChange={(v) => {
                         const next = v as t.VardeVernEngineStatus;
                         setStatus('presidio', next);
                         if (next === 'required' && presidioEngine.rolloutPhase === 'off')
                           setPhase('presidio', 'shadow');
                       }}
-                      disabled={disabled}
+                      disabled={disabled || presidioEnforcePhase}
                       aria-label="Presidio requirement"
                     />
                   </div>
@@ -589,7 +604,13 @@ export function VardeVernPage() {
                       id="phase-presidio"
                       value={presidioEngine.rolloutPhase}
                       options={presidioPhaseOptions}
-                      onChange={(v) => setPhase('presidio', v as t.VardeVernRolloutPhase)}
+                      onChange={(v) => {
+                        const next = v as t.VardeVernRolloutPhase;
+                        setPhase('presidio', next);
+                        // Enforce ⇒ Required (ADR 0023): keep the stored config consistent with the lock so
+                        // it never persists optional+enforce (which the backend would normalize anyway).
+                        if (next === 'enforce') setStatus('presidio', 'required');
+                      }}
                       disabled={disabled}
                       aria-label="Presidio rollout mode"
                     />

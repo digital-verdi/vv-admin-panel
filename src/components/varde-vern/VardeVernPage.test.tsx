@@ -188,11 +188,13 @@ vi.mock('@/components/configuration/fields', () => ({
     value: string;
     options?: { label: string; value: string }[];
     onChange: (v: string) => void;
+    disabled?: boolean;
     'aria-label'?: string;
   }) => (
     <select
       aria-label={p['aria-label']}
       value={p.value}
+      disabled={p.disabled}
       onChange={(e) => p.onChange(e.target.value)}
     >
       {(p.options ?? []).map((o) => (
@@ -518,6 +520,31 @@ describe('VardeVernPage — table redesign + English-only UI', () => {
     };
     const presidio = arg.data.rollout.engines.find((e) => e.engineId === 'presidio');
     expect(presidio!.status).toBe('required');
+  });
+
+  it('SECURITY (ADR 0023): switching the rollout mode to Enforce locks the requirement to Required (optional+enforce removed)', async () => {
+    renderPage();
+    await openPresidioTab();
+    fireEvent.change(screen.getByLabelText('Presidio rollout mode'), {
+      target: { value: 'enforce' },
+    });
+    const status = screen.getByLabelText('Presidio requirement') as HTMLSelectElement;
+    // Locked: disabled, forced to Required, and Optional is no longer offered.
+    expect(status).toBeDisabled();
+    expect(status.value).toBe('required');
+    expect(within(status).queryByRole('option', { name: 'Optional' })).toBeNull();
+    expect(
+      screen.getByText(/Switch the rollout mode to Shadow to choose Optional/),
+    ).toBeInTheDocument();
+    // Round-trips as required + enforce (never persists optional+enforce).
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(saveFn).toHaveBeenCalledTimes(1));
+    const arg = saveFn.mock.calls[0]![0] as {
+      data: { rollout: { engines: t.VardeVernRolloutEngine[] } };
+    };
+    const presidio = arg.data.rollout.engines.find((e) => e.engineId === 'presidio');
+    expect(presidio!.status).toBe('required');
+    expect(presidio!.rolloutPhase).toBe('enforce');
   });
 
   it('renders the Presidio engine as two setting rows (label + description + control), no standalone "presidio" label', async () => {

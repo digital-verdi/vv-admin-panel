@@ -40,6 +40,9 @@ export interface VardeVernEntity {
   scoreModel?: 'spacy-ner-fixed';
   /** SEMANTIC only: the fixed score the spaCy recognizer returns (drives the "fixed 0.85" note). */
   semanticFixedScore?: number;
+  /** SEMANTIC only: the detection mechanisms producing this entity (spaCy NER + label mapping + pattern
+   *  recognizers), sourced from the backend for the "Recognizers" column. Undefined for regex entities. */
+  recognizers?: string[];
 }
 
 export interface VardeVernRolloutEngine {

@@ -547,6 +547,23 @@ describe('VardeVernPage — table redesign + English-only UI', () => {
     expect(presidio!.rolloutPhase).toBe('enforce');
   });
 
+  it('SECURITY (ADR 0023): under global Enforce, each row Presidio requirement is also locked to Required', async () => {
+    renderPage();
+    await openPresidioTab();
+    fireEvent.change(screen.getByLabelText('Presidio rollout mode'), {
+      target: { value: 'enforce' },
+    });
+    for (const name of ['Person', 'Location', 'Organization']) {
+      const req = screen.getByLabelText(`${name} Presidio requirement`) as HTMLSelectElement;
+      expect(req).toBeDisabled();
+      expect(req.value).toBe('required');
+      expect(within(req).queryByRole('option', { name: 'Optional' })).toBeNull();
+    }
+    expect(
+      screen.getByText(/every row's requirement is locked to Required/),
+    ).toBeInTheDocument();
+  });
+
   it('renders the Presidio engine as two setting rows (label + description + control), no standalone "presidio" label', async () => {
     renderPage();
     await openPresidioTab();

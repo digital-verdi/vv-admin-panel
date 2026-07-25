@@ -53,6 +53,12 @@ const DETECTION_OPTIONS: t.SelectOption[] = [
   { label: 'Optional', value: 'optional' },
   { label: 'Required', value: 'required' },
 ];
+// Under the global Enforce rollout mode the engine is already Required (fail-closed, ADR 0023), so the
+// per-entity requirement is moot — Optional there would misleadingly read as "this entity may leak". The
+// row control is locked to Required while enforcing, matching the engine-level requirement lock.
+const DETECTION_OPTIONS_ENFORCE: t.SelectOption[] = DETECTION_OPTIONS.filter(
+  (o) => o.value === 'required',
+);
 const PHASE_OPTIONS: t.SelectOption[] = [
   { label: 'Off', value: 'off' },
   { label: 'Shadow', value: 'shadow' },
@@ -304,15 +310,15 @@ export function VardeVernPage() {
         <td className="px-4 py-2.5 align-top">
           <SelectField
             id={`detection-${entity.entityType}`}
-            value={detection}
-            options={DETECTION_OPTIONS}
+            value={presidioEnforcePhase ? 'required' : detection}
+            options={presidioEnforcePhase ? DETECTION_OPTIONS_ENFORCE : DETECTION_OPTIONS}
             onChange={(v) => {
               setEntity(entity.entityType, {
                 requiredEngines: v === 'required' ? ['presidio'] : [],
               });
               if (v === 'required' && presidioPhaseOff) setPhase('presidio', 'shadow');
             }}
-            disabled={disabled}
+            disabled={disabled || presidioEnforcePhase}
             aria-label={`${name} Presidio requirement`}
           />
         </td>
@@ -656,7 +662,10 @@ export function VardeVernPage() {
               <p>
                 Setting any row to{' '}
                 <strong className="font-medium text-(--cui-color-text-default)">Required</strong>{' '}
-                makes the entire Presidio connection mandatory, blocking the request if it fails.
+                makes the entire Presidio connection mandatory, blocking the request if it fails. While
+                the global rollout mode is{' '}
+                <strong className="font-medium text-(--cui-color-text-default)">Enforce</strong>, the
+                engine is already mandatory, so every row's requirement is locked to Required.
               </p>
               <p>
                 <strong className="font-medium text-(--cui-color-text-default)">

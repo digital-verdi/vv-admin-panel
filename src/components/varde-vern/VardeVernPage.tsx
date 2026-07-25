@@ -43,6 +43,11 @@ const ENFORCEMENT_GREEN: t.SelectOption[] = [
   ENFORCEMENT_ENFORCE,
 ];
 const GREEN_GATE_TOOLTIP = 'Enforce needs approved quality tests.';
+// Global rollout Enforce is offered only when Presidio is enforce-ELIGIBLE (the backend-derived
+// enforceAllowed — true once at least one entity + language passes the corpus quality gate). Mirrors the
+// per-entity gate so the panel never presents a rollout mode the backend rejects (ADR 0021).
+const GLOBAL_ENFORCE_GATE_TOOLTIP =
+  'Enforce becomes available once at least one entity and language passes the corpus quality gate.';
 // Presidio requirement — Required maps to the per-entity `requiredEngines: ['presidio']`, Optional to [].
 const DETECTION_OPTIONS: t.SelectOption[] = [
   { label: 'Optional', value: 'optional' },
@@ -168,6 +173,14 @@ export function VardeVernPage() {
   const presidioRequired =
     presidioEngine?.status === 'required' ||
     Object.values(policy.entities).some((e) => e.requiredEngines.includes('presidio'));
+  // The global Enforce rollout mode is offered only when Presidio is enforce-ELIGIBLE — the backend-derived
+  // `enforceAllowed` (the corpus-green gate, ADR 0021). Mirrors the per-entity `canEnforce` gate so the panel
+  // never presents a mode the backend would reject. `off` is separately removed when Presidio is Required.
+  const presidioEnforceAllowed = presidioEngine?.enforceAllowed ?? false;
+  const basePhaseOptions = presidioRequired ? PHASE_OPTIONS_REQUIRED : PHASE_OPTIONS;
+  const presidioPhaseOptions = presidioEnforceAllowed
+    ? basePhaseOptions
+    : basePhaseOptions.filter((o) => o.value !== 'enforce');
   // Mirror ALL THREE of the server's requiredEnginesSatisfiable rejection branches (routes.ts): a required
   // Presidio is invalid when it has no rollout entry, is disabled, or is Off — so the client blocks every
   // state the backend would 400 on, not just the disabled/off ones.
@@ -548,15 +561,21 @@ export function VardeVernPage() {
                       combined with Off).
                     </p>
                   </div>
-                  <div className="shrink-0">
+                  <div className="flex shrink-0 items-center gap-2">
                     <SelectField
                       id="phase-presidio"
                       value={presidioEngine.rolloutPhase}
-                      options={presidioRequired ? PHASE_OPTIONS_REQUIRED : PHASE_OPTIONS}
+                      options={presidioPhaseOptions}
                       onChange={(v) => setPhase('presidio', v as t.VardeVernRolloutPhase)}
                       disabled={disabled}
                       aria-label="Presidio rollout mode"
                     />
+                    {!presidioEnforceAllowed && (
+                      <HelpTooltip
+                        label="Presidio enforce availability"
+                        text={GLOBAL_ENFORCE_GATE_TOOLTIP}
+                      />
+                    )}
                   </div>
                 </div>
               </div>

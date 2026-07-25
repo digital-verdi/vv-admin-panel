@@ -115,6 +115,9 @@ export interface PresidioFinding {
   endUtf16: number;
   score: number;
   abovePolicyThreshold: boolean;
+  /** The recognizer that produced this finding (name only, e.g. `SpacyRecognizer` / `OrgLegalFormRecognizer`)
+   *  — metadata, never the matched substring. Present when the analyzer returns decision-process attribution. */
+  recognizer?: string;
 }
 
 export interface PresidioTestResult {

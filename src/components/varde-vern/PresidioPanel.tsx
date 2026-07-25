@@ -264,7 +264,9 @@ export function PresidioPanel({
           <div className="mt-3 flex flex-col gap-2">
             <SpanMarker text={analyzedText} spans={spans} />
             <p className="text-xs text-(--cui-color-text-muted)">
-              <strong>Score</strong> = {scoreNote} · <strong>Presidio</strong> = detected ·{' '}
+              <strong>Score</strong> = {scoreNote} · <strong>Match</strong> = the hit, shown locally
+              from the offsets (never returned by the server) · <strong>Recognizer</strong> = which
+              mechanism produced it · <strong>Presidio</strong> = detected ·{' '}
               <strong>Policy score</strong> = passes the saved threshold ·{' '}
               <strong>Varde Vern</strong> = ignore, observe, mask or block under the saved policy
               and rollout.
@@ -276,6 +278,8 @@ export function PresidioPanel({
                     <th className="px-3 py-2">Entity</th>
                     <th className="px-3 py-2">Score</th>
                     <th className="px-3 py-2">Offsets (UTF-16)</th>
+                    <th className="px-3 py-2">Match</th>
+                    <th className="px-3 py-2">Recognizer</th>
                     <th className="px-3 py-2">Presidio</th>
                     <th className="px-3 py-2">Policy score</th>
                     <th className="px-3 py-2">Varde Vern</th>
@@ -284,7 +288,7 @@ export function PresidioPanel({
                 <tbody>
                   {findings.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-3 py-2 text-(--cui-color-text-muted)">
+                      <td colSpan={8} className="px-3 py-2 text-(--cui-color-text-muted)">
                         No findings.
                       </td>
                     </tr>
@@ -301,6 +305,12 @@ export function PresidioPanel({
                           <td className="px-3 py-2 font-mono text-xs">
                             {f.startUtf16}–{f.endUtf16}
                           </td>
+                          {/* The matched word is sliced CLIENT-SIDE from the submitted text (the backend
+                              never echoes the substring — SECURITY §16); shown so humans can read the hit. */}
+                          <td className="px-3 py-2 font-mono text-xs">
+                            {analyzedText.slice(f.startUtf16, f.endUtf16)}
+                          </td>
+                          <td className="px-3 py-2 font-mono text-xs">{f.recognizer ?? '—'}</td>
                           <td className="px-3 py-2">
                             <Chip tone="measuring">found</Chip>
                           </td>

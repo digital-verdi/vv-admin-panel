@@ -118,6 +118,9 @@
     "@tanstack/start-storage-context": "1.166.23",
     "@tanstack/store": "0.9.3",
     "@tanstack/virtual-file-routes": "1.161.7",
-    "postcss": "8.5.15"
+    "postcss": "8.5.18",
+    "brace-expansion": "5.0.8",
+    "seroval": "1.5.3",
+    "seroval-plugins": "1.5.3"
   }
 }

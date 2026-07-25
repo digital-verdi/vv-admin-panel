@@ -7,7 +7,14 @@ import { PresidioPanel } from './PresidioPanel';
 const testFn = vi.fn().mockResolvedValue({
   status: 'success',
   findings: [
-    { entityType: 'PERSON', startUtf16: 0, endUtf16: 3, score: 0.9, abovePolicyThreshold: true },
+    {
+      entityType: 'PERSON',
+      startUtf16: 0,
+      endUtf16: 3,
+      score: 0.9,
+      abovePolicyThreshold: true,
+      recognizer: 'SpacyRecognizer',
+    },
   ],
 });
 const refreshFn = vi.fn().mockResolvedValue({ state: 'ready', supportedEntities: ['PERSON'] });
@@ -142,6 +149,13 @@ describe('PresidioPanel', () => {
     expect(screen.getByText('0.9')).toBeInTheDocument();
     expect(screen.queryByText('90%')).toBeNull();
     await waitFor(() => expect(container.querySelector('mark')?.textContent).toBe('Ola'));
+    // The results table shows the Match (sliced from the local text, offsets 0–3 of SAMPLE_TEXT = "Ola") and
+    // the Recognizer that produced the finding — scoped to the table (the SpanMarker "Ola" is outside it).
+    const table = screen.getByRole('table');
+    expect(within(table).getByText('Ola')).toBeInTheDocument();
+    expect(within(table).getByText('SpacyRecognizer')).toBeInTheDocument();
+    expect(within(table).getByRole('columnheader', { name: 'Match' })).toBeInTheDocument();
+    expect(within(table).getByRole('columnheader', { name: 'Recognizer' })).toBeInTheDocument();
   });
 
   it('test studio: the results legend explains Score is a fixed technical value, not a probability', async () => {

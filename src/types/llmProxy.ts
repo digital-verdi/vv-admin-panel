@@ -52,7 +52,6 @@ export interface LlmProxyConfigInput {
   allowedEmbeddingModels: string[];
   defaultEmbeddingDimensions: number | null;
   requestTimeoutMs: number;
-  promptCacheEnabled: boolean;
   piiEnabled: boolean;
   piiFailMode: PiiFailMode;
 }

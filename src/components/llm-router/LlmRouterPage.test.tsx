@@ -20,7 +20,6 @@ const mockConfig: t.LlmProxyConfig = {
   allowedEmbeddingModels: [],
   defaultEmbeddingDimensions: null,
   requestTimeoutMs: 30_000,
-  promptCacheEnabled: true,
   piiEnabled: false,
   piiFailMode: 'closed',
   openRouterKeyManaged: true,

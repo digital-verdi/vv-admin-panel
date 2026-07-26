@@ -121,7 +121,6 @@ const configInputSchema = z.object({
   allowedEmbeddingModels: z.array(z.string().min(1)),
   defaultEmbeddingDimensions: z.number().int().positive().nullable(),
   requestTimeoutMs: z.number().int().positive().max(MAX_REQUEST_TIMEOUT_MS),
-  promptCacheEnabled: z.boolean(),
   piiEnabled: z.boolean(),
   piiFailMode: z.enum(['closed', 'open']),
 });
@@ -140,7 +139,6 @@ interface RawProxyCommon {
   allowedEmbeddingModels: string[];
   defaultEmbeddingDimensions: number | null;
   requestTimeoutMs: number;
-  promptCacheEnabled: boolean;
   piiEnabled: boolean;
   piiFailMode: t.PiiFailMode;
   openRouterKeyManaged: boolean;

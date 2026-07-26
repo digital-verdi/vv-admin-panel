@@ -412,7 +412,7 @@ export function LlmRouterPage() {
         </FieldRow>
       </Section>
 
-      <Section title="Requests & caching">
+      <Section title="Requests">
         <FieldRow label="Request timeout (ms)" htmlFor="llm-timeout">
           <NumberField
             id="llm-timeout"
@@ -422,19 +422,6 @@ export function LlmRouterPage() {
             max={600_000}
             disabled={!canManage}
             aria-label="Request timeout in milliseconds"
-          />
-        </FieldRow>
-        <FieldRow
-          label="Prompt caching"
-          description="Send provider cache-control breakpoints where supported."
-          htmlFor="llm-prompt-cache"
-        >
-          <ToggleField
-            id="llm-prompt-cache"
-            checked={form.promptCacheEnabled}
-            onChange={(v) => update({ promptCacheEnabled: v })}
-            disabled={!canManage}
-            aria-label="Prompt caching"
           />
         </FieldRow>
       </Section>

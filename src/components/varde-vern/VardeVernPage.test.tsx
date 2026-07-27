@@ -99,6 +99,13 @@ const mockVern: t.VardeVern = {
     semanticScoreFixed: 0.85,
     defaultMinConfidence: 0.5,
   },
+  languageRouting: {
+    mode: 'franc',
+    minimumChars: 100,
+    minScoreGap: 0.05,
+    defaultLanguage: 'nb',
+    supportedLanguages: ['nb', 'en'],
+  },
   configRevision: 3,
   dbBacked: true,
 };
@@ -178,6 +185,13 @@ vi.mock('./PresidioPanel', () => ({
     };
     return <div data-testid="presidio-panel" data-can-manage={String(p.canManage)} />;
   },
+}));
+// The relocated status card (Overview → Operational status) has its own test; isolate it here + record
+// canManage so the page→card wiring is assertable.
+vi.mock('./PresidioStatusCard', () => ({
+  PresidioStatusCard: (p: { canManage?: boolean }) => (
+    <div data-testid="presidio-status-card" data-can-manage={String(p.canManage)} />
+  ),
 }));
 vi.mock('@/components/shared', () => ({
   EmptyState: ({ message }: { message: string }) => <div>{message}</div>,
@@ -261,6 +275,25 @@ describe('VardeVernPage — table redesign + English-only UI', () => {
     // The final column is "Policy action" (renamed from the old "Effective action").
     expect(within(matrix).getByText('Policy action')).toBeInTheDocument();
     expect(within(matrix).queryByText('Effective action')).toBeNull();
+  });
+
+  it('Operational status consists of Local PII Engine Status (Franc language detection) + Presidio Analyzer Status', async () => {
+    renderPage();
+    const status = await screen.findByRole('region', { name: 'Operational status' });
+    // Block 1: the local engine, stating Franc is used for local language detection (ADR 0026).
+    expect(within(status).getByText('Local PII Engine Status')).toBeInTheDocument();
+    expect(within(status).getByText('Language detection')).toBeInTheDocument();
+    expect(within(status).getByText('Franc (nb, en)')).toBeInTheDocument();
+    // Block 2: the relocated Presidio Analyzer status card, wired with canManage.
+    const card = within(status).getByTestId('presidio-status-card');
+    expect(card).toHaveAttribute('data-can-manage', 'true');
+  });
+
+  it('language detection falls back to a static Franc (nb, en) label on an older proxy', async () => {
+    queryValue = { ...mockVern, languageRouting: undefined };
+    renderPage();
+    const status = await screen.findByRole('region', { name: 'Operational status' });
+    expect(within(status).getByText('Franc (nb, en)')).toBeInTheDocument();
   });
 
   it('Local PII engine tab shows the regex section (checksum + enforce/block action)', async () => {

@@ -22,6 +22,7 @@ import { notifySuccess, notifyError } from '@/utils';
 import { SystemCapabilities } from '@/constants';
 import { InsightPanel } from './InsightPanel';
 import { PresidioPanel } from './PresidioPanel';
+import { PresidioStatusCard } from './PresidioStatusCard';
 import { useCapabilities } from '@/hooks';
 
 type SubTab = 'overview' | 'local' | 'presidio' | 'insight';
@@ -123,8 +124,11 @@ export function VardeVernPage() {
 
   const { regex, semantic } = groupEntitiesByEngine(data.entities);
   const disabled = !canManage || busy;
-  const analyzerLanguages =
-    data.presidio?.languages ?? (data.presidio?.language ? [data.presidio.language] : ['nb', 'en']);
+  // The local engine's language detection line (ADR 0026) — Franc picks ONE Presidio language per request.
+  // Reads the new read-only languageRouting; static "Franc (nb, en)" fallback for an older proxy.
+  const languageDetectionLabel = data.languageRouting
+    ? `Franc (${data.languageRouting.supportedLanguages.join(', ') || 'nb, en'})`
+    : 'Franc (nb, en)';
   // The engine's fixed semantic score (the score spaCy ASSIGNS to a finding) — named in the Minimum Score
   // help text. Kept dynamic so it tracks the backend rather than hardcoding 0.85.
   const semanticFixedScore = data.presidio?.semanticScoreFixed ?? 0.85;
@@ -439,35 +443,32 @@ export function VardeVernPage() {
         <div className="flex flex-col gap-4">
           <Section
             title="Operational status"
-            description="When Varde Vern is enabled, local regex protection is required and enforced, and required-engine failures stop the request. Presidio adds detection. Global activation, each engine's requirement, and its rollout phase are separate controls."
+            description="When Varde Vern is enabled, the local PII engine is required and enforced, and required-engine failures stop the request. Presidio adds supplementary detection. Global activation, each engine's requirement, and its rollout phase are separate controls."
           >
-            <div className="grid grid-cols-1 gap-x-8 gap-y-1 sm:grid-cols-2">
-              <div className="flex items-center justify-between py-1 text-sm">
-                <span className="text-(--cui-color-text-muted)">Varde Vern</span>
-                <Badge tone={globalStatus.tone}>{globalStatus.label}</Badge>
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              {/* Local PII Engine Status — always-on regex + Franc local language detection (ADR 0026). */}
+              <div className="rounded-md border border-(--cui-color-stroke-default) p-3">
+                <h3 className="mb-2 text-sm font-medium text-(--cui-color-title-default)">
+                  Local PII Engine Status
+                </h3>
+                <div className="flex items-center justify-between py-1 text-sm">
+                  <span className="text-(--cui-color-text-muted)">Varde Vern</span>
+                  <Badge tone={globalStatus.tone}>{globalStatus.label}</Badge>
+                </div>
+                <div className="flex items-center justify-between py-1 text-sm">
+                  <span className="text-(--cui-color-text-muted)">Local regex</span>
+                  <Badge tone="protective">required · enforce</Badge>
+                </div>
+                <div className="flex items-center justify-between py-1 text-sm">
+                  <span className="text-(--cui-color-text-muted)">Language detection</span>
+                  <Badge tone="inactive">{languageDetectionLabel}</Badge>
+                </div>
+                {data.presidio?.localEngine && (
+                  <StatusRow label="Engine" value={data.presidio.localEngine} />
+                )}
               </div>
-              <div className="flex items-center justify-between py-1 text-sm">
-                <span className="text-(--cui-color-text-muted)">Local regex</span>
-                <Badge tone="protective">required · enforce</Badge>
-              </div>
-              <div className="flex items-center justify-between py-1 text-sm">
-                <span className="text-(--cui-color-text-muted)">Presidio</span>
-                <Badge
-                  tone={
-                    data.presidio?.configured
-                      ? phaseTone(presidioEngine?.rolloutPhase ?? 'off')
-                      : 'inactive'
-                  }
-                >
-                  {data.presidio?.configured
-                    ? `${data.presidio.state ?? 'unknown'} · ${presidioEngine?.rolloutPhase ?? 'off'}`
-                    : 'not configured'}
-                </Badge>
-              </div>
-              <div className="flex items-center justify-between py-1 text-sm">
-                <span className="text-(--cui-color-text-muted)">Languages</span>
-                <Badge tone="inactive">{analyzerLanguages.join(', ') || '—'}</Badge>
-              </div>
+              {/* Presidio Analyzer Status — relocated from the Presidio Analyzer tab (ADR 0026 / Fase 5). */}
+              <PresidioStatusCard status={data.presidio} canManage={canManage} />
             </div>
           </Section>
 

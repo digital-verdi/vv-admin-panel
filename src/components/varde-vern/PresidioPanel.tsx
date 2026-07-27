@@ -1,14 +1,14 @@
 import { useMemo, useState } from 'react';
 import { Icon } from '@clickhouse/click-ui';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import type { MarkSpan } from './SpanMarker';
 import type { Tone } from './operations';
 import type * as t from '@/types';
 import { SelectField, TextareaField } from '@/components/configuration/fields';
-import { testPresidioFn, refreshPresidioFn } from '@/server';
+import { testPresidioFn } from '@/server';
 import { PresidioScoreField } from './PresidioScoreField';
 import { entityDisplayName, formatPresidioScore } from './operations';
-import { Chip, StatusRow } from './ui';
+import { Chip } from './ui';
 import { SpanMarker } from './SpanMarker';
 import { notifyError } from '@/utils';
 
@@ -25,13 +25,6 @@ const REQUESTABLE_ENTITIES = ['PERSON', 'LOCATION', 'ORGANIZATION'] as const;
 // A SYNTHETIC starter sample (no real person). The admin can edit it; a warning discourages real PII.
 const SAMPLE_TEXT = 'Ola Nordmann bor i Oslo og jobber i Nordre Skogtjenester.';
 
-const STATE_TONE: Record<string, Tone> = {
-  ready: 'protective',
-  degraded: 'measuring',
-  unavailable: 'inactive',
-  unknown: 'inactive',
-};
-
 export interface PresidioPanelProps {
   status?: t.PresidioStatus;
   /** MANAGE_CONFIGS — analyze + refresh call the privileged proxy admin API, so they are disabled without
@@ -47,9 +40,10 @@ export interface PresidioPanelProps {
 }
 
 /**
- * The Presidio Analyzer sub-panel: read-only deployment/health status (never the endpoint/host/token)
- * plus the native test studio. The studio calls ONLY the proxy admin API, marks the browser's own input
- * from returned offsets (no matched substring crosses the API), persists nothing, and never calls an LLM.
+ * The Presidio Analyzer test studio: analyzes SYNTHETIC text against the proxy admin API, marks the browser's
+ * own input from returned offsets (no matched substring crosses the API), persists nothing, and never calls
+ * an LLM. The read-only deployment/health status card lives in Overview → Operational status
+ * (PresidioStatusCard) — everything else on this tab is unchanged.
  */
 export function PresidioPanel({
   status,
@@ -58,7 +52,6 @@ export function PresidioPanel({
   presidioPhase = 'off',
   presidioStatus = 'disabled',
 }: PresidioPanelProps) {
-  const queryClient = useQueryClient();
   const [text, setText] = useState(SAMPLE_TEXT);
   const [language, setLanguage] = useState(status?.language === 'en' ? 'en' : 'nb');
   const [threshold, setThreshold] = useState(0.5);
@@ -74,12 +67,6 @@ export function PresidioPanel({
       scoreThreshold?: number;
     }) => testPresidioFn({ data: input }),
     onError: (err) => notifyError(err instanceof Error ? err.message : 'Presidio test failed'),
-  });
-  const refresh = useMutation({
-    mutationFn: () => refreshPresidioFn(),
-    // F12b: the refresh re-probes on the proxy; invalidate the query so the status card actually updates.
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['varde-vern'] }),
-    onError: (err) => notifyError(err instanceof Error ? err.message : 'Presidio refresh failed'),
   });
 
   const findings = analyze.data?.findings ?? [];
@@ -105,7 +92,6 @@ export function PresidioPanel({
     );
   }
 
-  const live = status.state ?? 'unknown';
   // The Score column shows the analyzer's RAW score. The current spaCy recognizer returns a FIXED score for
   // every finding, so it is a technical value, not a calibrated probability — the legend says so, naming the
   // reported fixed score when the backend exposes it.
@@ -129,58 +115,7 @@ export function PresidioPanel({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Read-only status — never endpoint/host/token. */}
-      <div className="rounded-md border border-(--cui-color-stroke-default) p-3">
-        <div className="mb-2 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Chip tone={STATE_TONE[live] ?? 'inactive'}>{live}</Chip>
-            <span className="text-sm font-medium text-(--cui-color-title-default)">
-              Presidio Analyzer
-            </span>
-          </div>
-          {canManage && (
-            <button
-              type="button"
-              onClick={() => refresh.mutate()}
-              disabled={refresh.isPending}
-              title="Rechecks analyzer health and supported entity types."
-              className="inline-flex items-center gap-1 rounded-md border border-(--cui-color-stroke-default) px-2 py-1 text-xs disabled:opacity-50"
-            >
-              <Icon name="refresh" size="sm" /> Refresh
-            </button>
-          )}
-        </div>
-        <StatusRow label="Credential" value={status.credential ?? 'managed'} />
-        <StatusRow
-          label="Image"
-          value={`${status.imageMode ?? 'unknown'} · ${status.release ?? 'unknown'}`}
-        />
-        <StatusRow label="Digest" value={status.digest ?? 'unknown'} />
-        <StatusRow
-          label="Languages"
-          value={(status.languages ?? [status.language]).filter(Boolean).join(', ') || '—'}
-        />
-        <StatusRow label="NLP Engine" value={status.nlpEngine ?? '—'} />
-        <StatusRow label="Local PII engine" value={status.localEngine ?? '—'} />
-        <StatusRow
-          label="Inactive modules"
-          value={(status.inactiveModules ?? []).join(', ') || '—'}
-        />
-        <StatusRow
-          label="Supported entities"
-          value={(status.supportedEntities ?? []).join(', ') || '—'}
-        />
-        <StatusRow
-          label="Last probe"
-          value={
-            status.lastProbeAt
-              ? `${new Date(status.lastProbeAt).toISOString()} (${status.lastProbeLatencyMs ?? '?'} ms)`
-              : 'never'
-          }
-        />
-      </div>
-
-      {/* Native test studio. */}
+      {/* Native test studio. The read-only status card now lives in Overview → Operational status. */}
       <div className="rounded-md border border-(--cui-color-stroke-default) p-3">
         <h3 className="mb-2 text-sm font-semibold text-(--cui-color-title-default)">Test studio</h3>
         <div

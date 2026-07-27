@@ -137,3 +137,39 @@ export function dispositionDisplay(disposition: VernDisposition): { label: strin
 export function formatPresidioScore(score: number): string {
   return String(Number(score.toFixed(2)));
 }
+
+const LANGUAGE_LABELS: Record<string, string> = {
+  nb: 'Norwegian (nb)',
+  en: 'English (en)',
+};
+
+/** Display label for a resolved language code (falls back to the raw code). */
+export function languageLabel(language?: string): string {
+  return (language && LANGUAGE_LABELS[language]) ?? language ?? '—';
+}
+
+/** Human-readable "why this language" for the test studio (ADR 0026): Franc detection, the UI-language
+ *  hint, an explicit pin, or a fallback. Tone follows the same protective/measuring/inactive scale. */
+export function describeLanguageSource(source?: t.PresidioLanguageSource): {
+  label: string;
+  tone: Tone;
+} {
+  switch (source) {
+    case 'franc_current_turn':
+      return { label: 'Detected by Franc (this text)', tone: 'protective' };
+    case 'franc_history_window':
+      return { label: 'Detected by Franc (recent history)', tone: 'protective' };
+    case 'explicit':
+      return { label: 'Pinned by the language selector', tone: 'measuring' };
+    case 'hint':
+      return { label: 'From the UI-language hint (browser/setting)', tone: 'measuring' };
+    case 'hint_default_en':
+      return { label: 'Fallback to English (Franc uncertain, no usable hint)', tone: 'inactive' };
+    case 'single_enabled':
+      return { label: 'Only one language is configured', tone: 'inactive' };
+    case 'error_fallback':
+      return { label: 'Fallback to English (detection error)', tone: 'inactive' };
+    default:
+      return { label: 'Unknown', tone: 'inactive' };
+  }
+}

@@ -16,6 +16,11 @@ const testFn = vi.fn().mockResolvedValue({
       recognizer: 'SpacyRecognizer',
     },
   ],
+  requestedLanguage: 'auto',
+  resolvedLanguage: 'nb',
+  languageResolutionSource: 'franc_current_turn',
+  scoreGap: 0.42,
+  sampleChars: 57,
 });
 const refreshFn = vi.fn().mockResolvedValue({ state: 'ready', supportedEntities: ['PERSON'] });
 
@@ -31,14 +36,25 @@ vi.mock('@clickhouse/click-ui', () => ({
   Icon: ({ name }: { name: string }) => <span data-icon={name} />,
 }));
 vi.mock('@/components/configuration/fields', () => ({
-  SelectField: (p: { value: string; onChange: (v: string) => void; 'aria-label'?: string }) => (
+  SelectField: (p: {
+    value: string;
+    onChange: (v: string) => void;
+    options?: { label: string; value: string }[];
+    'aria-label'?: string;
+  }) => (
     <select
       aria-label={p['aria-label']}
       value={p.value}
       onChange={(e) => p.onChange(e.target.value)}
     >
-      <option value="nb">nb</option>
-      <option value="en">en</option>
+      {(p.options ?? [
+        { label: 'nb', value: 'nb' },
+        { label: 'en', value: 'en' },
+      ]).map((o) => (
+        <option key={o.value} value={o.value}>
+          {o.label}
+        </option>
+      ))}
     </select>
   ),
   TextareaField: (p: { value: string; onChange: (v: string) => void; 'aria-label'?: string }) => (
@@ -176,6 +192,45 @@ describe('PresidioPanel', () => {
     };
     expect(arg.data.entities).toEqual(['PERSON']);
     expect(arg.data.scoreThreshold).toBe(0.5);
+  });
+
+  it('ADR 0026: language defaults to Auto and is sent to the admin API', async () => {
+    renderPanel(CONFIGURED, { canManage: true });
+    expect((screen.getByLabelText('Language') as HTMLSelectElement).value).toBe('auto');
+    fireEvent.click(screen.getByRole('button', { name: /analyze/i }));
+    await waitFor(() => expect(testFn).toHaveBeenCalledTimes(1));
+    const arg = testFn.mock.calls[0]![0] as { data: { language?: string; uiLanguage?: string } };
+    expect(arg.data.language).toBe('auto');
+    expect(arg.data.uiLanguage).toBeUndefined(); // no hint chosen
+  });
+
+  it('ADR 0026: the results show the resolved language + the reason (Franc + score gap + sample size)', async () => {
+    renderPanel(CONFIGURED, { canManage: true });
+    fireEvent.click(screen.getByRole('button', { name: /analyze/i }));
+    await waitFor(() => expect(screen.getByText('Language detection')).toBeInTheDocument());
+    const card = screen.getByText('Language detection').closest('div')!.parentElement!;
+    expect(within(card).getAllByText('Norwegian (nb)').length).toBeGreaterThan(0);
+    expect(within(card).getByText(/Detected by Franc/i)).toBeInTheDocument();
+    expect(within(card).getByText(/score gap 0\.42/i)).toBeInTheDocument();
+    expect(within(card).getByText(/57 characters analyzed/i)).toBeInTheDocument();
+  });
+
+  it('ADR 0026: an "if uncertain" UI-language hint is sent as uiLanguage (auto only)', async () => {
+    renderPanel(CONFIGURED, { canManage: true });
+    // The hint selector appears only under Auto; pick Norwegian as the simulated browser hint.
+    fireEvent.change(screen.getByLabelText('UI-language hint'), { target: { value: 'nb' } });
+    fireEvent.click(screen.getByRole('button', { name: /analyze/i }));
+    await waitFor(() => expect(testFn).toHaveBeenCalledTimes(1));
+    const arg = testFn.mock.calls[0]![0] as { data: { language?: string; uiLanguage?: string } };
+    expect(arg.data.language).toBe('auto');
+    expect(arg.data.uiLanguage).toBe('nb');
+  });
+
+  it('ADR 0026: the UI-language hint selector is hidden when a language is pinned (not auto)', () => {
+    renderPanel(CONFIGURED, { canManage: true });
+    expect(screen.getByLabelText('UI-language hint')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Language'), { target: { value: 'en' } });
+    expect(screen.queryByLabelText('UI-language hint')).toBeNull();
   });
 
   // The full decision table (plan Del 6): (presidioStatus, presidioPhase, saved policy action, above saved

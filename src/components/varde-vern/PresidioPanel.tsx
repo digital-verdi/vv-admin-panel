@@ -7,12 +7,26 @@ import type * as t from '@/types';
 import { SelectField, TextareaField } from '@/components/configuration/fields';
 import { testPresidioFn } from '@/server';
 import { PresidioScoreField } from './PresidioScoreField';
-import { entityDisplayName, formatPresidioScore } from './operations';
+import {
+  entityDisplayName,
+  formatPresidioScore,
+  languageLabel,
+  describeLanguageSource,
+} from './operations';
 import { Chip } from './ui';
 import { SpanMarker } from './SpanMarker';
 import { notifyError } from '@/utils';
 
+// 'auto' (default) lets the proxy's Franc detector pick the language; nb/en pin it (ADR 0026).
 const LANGUAGE_OPTIONS: t.SelectOption[] = [
+  { label: 'Auto (detect)', value: 'auto' },
+  { label: 'Norwegian (nb)', value: 'nb' },
+  { label: 'English (en)', value: 'en' },
+];
+
+// The simulated UI-language / browser hint the resolver falls back to when Franc is uncertain (auto only).
+const UI_HINT_OPTIONS: t.SelectOption[] = [
+  { label: 'None', value: '' },
   { label: 'Norwegian (nb)', value: 'nb' },
   { label: 'English (en)', value: 'en' },
 ];
@@ -53,7 +67,8 @@ export function PresidioPanel({
   presidioStatus = 'disabled',
 }: PresidioPanelProps) {
   const [text, setText] = useState(SAMPLE_TEXT);
-  const [language, setLanguage] = useState(status?.language === 'en' ? 'en' : 'nb');
+  const [language, setLanguage] = useState<'auto' | 'nb' | 'en'>('auto');
+  const [uiHint, setUiHint] = useState<'' | 'nb' | 'en'>('');
   const [threshold, setThreshold] = useState(0.5);
   const [entityFilter, setEntityFilter] = useState<Record<string, boolean>>({});
 
@@ -62,7 +77,8 @@ export function PresidioPanel({
   const analyze = useMutation({
     mutationFn: (input: {
       text: string;
-      language: string;
+      language: 'auto' | 'nb' | 'en';
+      uiLanguage?: 'nb' | 'en';
       entities?: string[];
       scoreThreshold?: number;
     }) => testPresidioFn({ data: input }),
@@ -70,6 +86,9 @@ export function PresidioPanel({
   });
 
   const findings = analyze.data?.findings ?? [];
+  // ADR 0026: the ONE language this analysis ran in + how it was decided (Franc / hint / fallback / pinned).
+  const resolvedLanguage = analyze.data?.resolvedLanguage;
+  const languageSource = describeLanguageSource(analyze.data?.languageResolutionSource);
   // F12c: mark + slice against the SUBMITTED text snapshot (the mutation variables), never the current
   // editable `text` — otherwise editing after analysis would mark the wrong characters.
   const analyzedText = analyze.variables?.text ?? '';
@@ -150,15 +169,36 @@ export function PresidioPanel({
               aria-label="Language"
               value={language}
               options={LANGUAGE_OPTIONS}
-              onChange={setLanguage}
+              onChange={(v) => setLanguage(v as 'auto' | 'nb' | 'en')}
             />
           </div>
+          {/* ADR 0026: when Auto is selected, let the admin simulate the user's UI-language / browser hint —
+              the resolver uses it ONLY when Franc is uncertain (short/ambiguous text), so this demonstrates
+              the hint path (and its "never auto-nb" fallback) without a real browser. */}
+          {language === 'auto' && (
+            <div className="w-48">
+              <label
+                htmlFor="presidio-test-uihint"
+                className="mb-1 block text-xs text-(--cui-color-text-muted)"
+              >
+                If uncertain, use hint
+              </label>
+              <SelectField
+                id="presidio-test-uihint"
+                aria-label="UI-language hint"
+                value={uiHint}
+                options={UI_HINT_OPTIONS}
+                onChange={(v) => setUiHint(v as '' | 'nb' | 'en')}
+              />
+            </div>
+          )}
           <button
             type="button"
             onClick={() =>
               analyze.mutate({
                 text,
                 language,
+                uiLanguage: language === 'auto' && uiHint ? uiHint : undefined,
                 entities: selectedEntities.length > 0 ? [...selectedEntities] : undefined,
                 scoreThreshold: threshold,
               })
@@ -197,6 +237,32 @@ export function PresidioPanel({
 
         {analyze.data && (
           <div className="mt-3 flex flex-col gap-2">
+            {/* ADR 0026 — which language the answer is shown in, and WHY (Franc score / UI-language hint /
+                fallback / an explicit pin). Present on any proxy that exposes language routing. */}
+            {resolvedLanguage && (
+              <div className="rounded-md border border-(--cui-color-stroke-default) p-3">
+                <div className="mb-1 flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-medium text-(--cui-color-title-default)">
+                    Language detection
+                  </span>
+                  <Chip tone="protective">{languageLabel(resolvedLanguage)}</Chip>
+                  <Chip tone={languageSource.tone}>{languageSource.label}</Chip>
+                </div>
+                <p className="text-xs text-(--cui-color-text-muted)">
+                  The analysis ran in <strong>{languageLabel(resolvedLanguage)}</strong>
+                  {typeof analyze.data.scoreGap === 'number' && (
+                    <> · Franc score gap {analyze.data.scoreGap.toFixed(2)}</>
+                  )}
+                  {typeof analyze.data.sampleChars === 'number' && (
+                    <> · {analyze.data.sampleChars} characters analyzed</>
+                  )}
+                  {analyze.data.requestedLanguage && (
+                    <> · requested “{analyze.data.requestedLanguage}”</>
+                  )}
+                  .
+                </p>
+              </div>
+            )}
             <SpanMarker text={analyzedText} spans={spans} />
             <p className="text-xs text-(--cui-color-text-muted)">
               <strong>Score</strong> = {scoreNote} · <strong>Match</strong> = the hit, shown locally

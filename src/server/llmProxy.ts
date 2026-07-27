@@ -328,7 +328,10 @@ const saveVardeVernSchema = z.object({
 // offsets/labels/scores (never the matched substring); nothing is persisted. Server-only (admin Bearer).
 const presidioTestSchema = z.object({
   text: z.string().min(1).max(10_000),
-  language: z.string().min(1).optional(),
+  // ADR 0026: 'auto' lets Franc detect the language; 'nb'/'en' pins it. `uiLanguage` is the simulated
+  // UI-language / browser hint the resolver falls back to when Franc is uncertain (auto only).
+  language: z.enum(['auto', 'nb', 'en']).optional(),
+  uiLanguage: z.enum(['nb', 'en']).optional(),
   entities: z.array(z.string().min(1)).optional(),
   scoreThreshold: z.number().min(0).max(1).optional(),
 });

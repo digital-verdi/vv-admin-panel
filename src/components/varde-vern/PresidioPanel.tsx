@@ -1,18 +1,32 @@
 import { useMemo, useState } from 'react';
 import { Icon } from '@clickhouse/click-ui';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import type { MarkSpan } from './SpanMarker';
 import type { Tone } from './operations';
 import type * as t from '@/types';
 import { SelectField, TextareaField } from '@/components/configuration/fields';
-import { testPresidioFn, refreshPresidioFn } from '@/server';
+import { testPresidioFn } from '@/server';
 import { PresidioScoreField } from './PresidioScoreField';
-import { entityDisplayName, formatPresidioScore } from './operations';
-import { Chip, StatusRow } from './ui';
+import {
+  entityDisplayName,
+  formatPresidioScore,
+  languageLabel,
+  describeLanguageSource,
+} from './operations';
+import { Chip } from './ui';
 import { SpanMarker } from './SpanMarker';
 import { notifyError } from '@/utils';
 
+// 'auto' (default) lets the proxy's Franc detector pick the language; nb/en pin it (ADR 0026).
 const LANGUAGE_OPTIONS: t.SelectOption[] = [
+  { label: 'Auto (detect)', value: 'auto' },
+  { label: 'Norwegian (nb)', value: 'nb' },
+  { label: 'English (en)', value: 'en' },
+];
+
+// The simulated UI-language / browser hint the resolver falls back to when Franc is uncertain (auto only).
+const UI_HINT_OPTIONS: t.SelectOption[] = [
+  { label: 'None', value: '' },
   { label: 'Norwegian (nb)', value: 'nb' },
   { label: 'English (en)', value: 'en' },
 ];
@@ -24,13 +38,6 @@ const REQUESTABLE_ENTITIES = ['PERSON', 'LOCATION', 'ORGANIZATION'] as const;
 
 // A SYNTHETIC starter sample (no real person). The admin can edit it; a warning discourages real PII.
 const SAMPLE_TEXT = 'Ola Nordmann bor i Oslo og jobber i Nordre Skogtjenester.';
-
-const STATE_TONE: Record<string, Tone> = {
-  ready: 'protective',
-  degraded: 'measuring',
-  unavailable: 'inactive',
-  unknown: 'inactive',
-};
 
 export interface PresidioPanelProps {
   status?: t.PresidioStatus;
@@ -47,9 +54,10 @@ export interface PresidioPanelProps {
 }
 
 /**
- * The Presidio Analyzer sub-panel: read-only deployment/health status (never the endpoint/host/token)
- * plus the native test studio. The studio calls ONLY the proxy admin API, marks the browser's own input
- * from returned offsets (no matched substring crosses the API), persists nothing, and never calls an LLM.
+ * The Presidio Analyzer test studio: analyzes SYNTHETIC text against the proxy admin API, marks the browser's
+ * own input from returned offsets (no matched substring crosses the API), persists nothing, and never calls
+ * an LLM. The read-only deployment/health status card lives in Overview → Operational status
+ * (PresidioStatusCard) — everything else on this tab is unchanged.
  */
 export function PresidioPanel({
   status,
@@ -58,9 +66,9 @@ export function PresidioPanel({
   presidioPhase = 'off',
   presidioStatus = 'disabled',
 }: PresidioPanelProps) {
-  const queryClient = useQueryClient();
   const [text, setText] = useState(SAMPLE_TEXT);
-  const [language, setLanguage] = useState(status?.language === 'en' ? 'en' : 'nb');
+  const [language, setLanguage] = useState<'auto' | 'nb' | 'en'>('auto');
+  const [uiHint, setUiHint] = useState<'' | 'nb' | 'en'>('');
   const [threshold, setThreshold] = useState(0.5);
   const [entityFilter, setEntityFilter] = useState<Record<string, boolean>>({});
 
@@ -69,20 +77,18 @@ export function PresidioPanel({
   const analyze = useMutation({
     mutationFn: (input: {
       text: string;
-      language: string;
+      language: 'auto' | 'nb' | 'en';
+      uiLanguage?: 'nb' | 'en';
       entities?: string[];
       scoreThreshold?: number;
     }) => testPresidioFn({ data: input }),
     onError: (err) => notifyError(err instanceof Error ? err.message : 'Presidio test failed'),
   });
-  const refresh = useMutation({
-    mutationFn: () => refreshPresidioFn(),
-    // F12b: the refresh re-probes on the proxy; invalidate the query so the status card actually updates.
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['varde-vern'] }),
-    onError: (err) => notifyError(err instanceof Error ? err.message : 'Presidio refresh failed'),
-  });
 
   const findings = analyze.data?.findings ?? [];
+  // ADR 0026: the ONE language this analysis ran in + how it was decided (Franc / hint / fallback / pinned).
+  const resolvedLanguage = analyze.data?.resolvedLanguage;
+  const languageSource = describeLanguageSource(analyze.data?.languageResolutionSource);
   // F12c: mark + slice against the SUBMITTED text snapshot (the mutation variables), never the current
   // editable `text` — otherwise editing after analysis would mark the wrong characters.
   const analyzedText = analyze.variables?.text ?? '';
@@ -105,7 +111,6 @@ export function PresidioPanel({
     );
   }
 
-  const live = status.state ?? 'unknown';
   // The Score column shows the analyzer's RAW score. The current spaCy recognizer returns a FIXED score for
   // every finding, so it is a technical value, not a calibrated probability — the legend says so, naming the
   // reported fixed score when the backend exposes it.
@@ -129,58 +134,7 @@ export function PresidioPanel({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Read-only status — never endpoint/host/token. */}
-      <div className="rounded-md border border-(--cui-color-stroke-default) p-3">
-        <div className="mb-2 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Chip tone={STATE_TONE[live] ?? 'inactive'}>{live}</Chip>
-            <span className="text-sm font-medium text-(--cui-color-title-default)">
-              Presidio Analyzer
-            </span>
-          </div>
-          {canManage && (
-            <button
-              type="button"
-              onClick={() => refresh.mutate()}
-              disabled={refresh.isPending}
-              title="Rechecks analyzer health and supported entity types."
-              className="inline-flex items-center gap-1 rounded-md border border-(--cui-color-stroke-default) px-2 py-1 text-xs disabled:opacity-50"
-            >
-              <Icon name="refresh" size="sm" /> Refresh
-            </button>
-          )}
-        </div>
-        <StatusRow label="Credential" value={status.credential ?? 'managed'} />
-        <StatusRow
-          label="Image"
-          value={`${status.imageMode ?? 'unknown'} · ${status.release ?? 'unknown'}`}
-        />
-        <StatusRow label="Digest" value={status.digest ?? 'unknown'} />
-        <StatusRow
-          label="Languages"
-          value={(status.languages ?? [status.language]).filter(Boolean).join(', ') || '—'}
-        />
-        <StatusRow label="NLP Engine" value={status.nlpEngine ?? '—'} />
-        <StatusRow label="Local PII engine" value={status.localEngine ?? '—'} />
-        <StatusRow
-          label="Inactive modules"
-          value={(status.inactiveModules ?? []).join(', ') || '—'}
-        />
-        <StatusRow
-          label="Supported entities"
-          value={(status.supportedEntities ?? []).join(', ') || '—'}
-        />
-        <StatusRow
-          label="Last probe"
-          value={
-            status.lastProbeAt
-              ? `${new Date(status.lastProbeAt).toISOString()} (${status.lastProbeLatencyMs ?? '?'} ms)`
-              : 'never'
-          }
-        />
-      </div>
-
-      {/* Native test studio. */}
+      {/* Native test studio. The read-only status card now lives in Overview → Operational status. */}
       <div className="rounded-md border border-(--cui-color-stroke-default) p-3">
         <h3 className="mb-2 text-sm font-semibold text-(--cui-color-title-default)">Test studio</h3>
         <div
@@ -215,15 +169,36 @@ export function PresidioPanel({
               aria-label="Language"
               value={language}
               options={LANGUAGE_OPTIONS}
-              onChange={setLanguage}
+              onChange={(v) => setLanguage(v as 'auto' | 'nb' | 'en')}
             />
           </div>
+          {/* ADR 0026: when Auto is selected, let the admin simulate the user's UI-language / browser hint —
+              the resolver uses it ONLY when Franc is uncertain (short/ambiguous text), so this demonstrates
+              the hint path (and its "never auto-nb" fallback) without a real browser. */}
+          {language === 'auto' && (
+            <div className="w-48">
+              <label
+                htmlFor="presidio-test-uihint"
+                className="mb-1 block text-xs text-(--cui-color-text-muted)"
+              >
+                If uncertain, use hint
+              </label>
+              <SelectField
+                id="presidio-test-uihint"
+                aria-label="UI-language hint"
+                value={uiHint}
+                options={UI_HINT_OPTIONS}
+                onChange={(v) => setUiHint(v as '' | 'nb' | 'en')}
+              />
+            </div>
+          )}
           <button
             type="button"
             onClick={() =>
               analyze.mutate({
                 text,
                 language,
+                uiLanguage: language === 'auto' && uiHint ? uiHint : undefined,
                 entities: selectedEntities.length > 0 ? [...selectedEntities] : undefined,
                 scoreThreshold: threshold,
               })
@@ -262,6 +237,32 @@ export function PresidioPanel({
 
         {analyze.data && (
           <div className="mt-3 flex flex-col gap-2">
+            {/* ADR 0026 — which language the answer is shown in, and WHY (Franc score / UI-language hint /
+                fallback / an explicit pin). Present on any proxy that exposes language routing. */}
+            {resolvedLanguage && (
+              <div className="rounded-md border border-(--cui-color-stroke-default) p-3">
+                <div className="mb-1 flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-medium text-(--cui-color-title-default)">
+                    Language detection
+                  </span>
+                  <Chip tone="protective">{languageLabel(resolvedLanguage)}</Chip>
+                  <Chip tone={languageSource.tone}>{languageSource.label}</Chip>
+                </div>
+                <p className="text-xs text-(--cui-color-text-muted)">
+                  The analysis ran in <strong>{languageLabel(resolvedLanguage)}</strong>
+                  {typeof analyze.data.scoreGap === 'number' && (
+                    <> · Franc score gap {analyze.data.scoreGap.toFixed(2)}</>
+                  )}
+                  {typeof analyze.data.sampleChars === 'number' && (
+                    <> · {analyze.data.sampleChars} characters analyzed</>
+                  )}
+                  {analyze.data.requestedLanguage && (
+                    <> · requested “{analyze.data.requestedLanguage}”</>
+                  )}
+                  .
+                </p>
+              </div>
+            )}
             <SpanMarker text={analyzedText} spans={spans} />
             <p className="text-xs text-(--cui-color-text-muted)">
               <strong>Score</strong> = {scoreNote} · <strong>Match</strong> = the hit, shown locally

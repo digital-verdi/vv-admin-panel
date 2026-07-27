@@ -9,6 +9,8 @@ import {
   effectiveDisposition,
   dispositionDisplay,
   formatPresidioScore,
+  languageLabel,
+  describeLanguageSource,
 } from './operations';
 
 const entity = (over: Partial<t.VardeVernEntity>): t.VardeVernEntity => ({
@@ -137,5 +139,28 @@ describe('formatPresidioScore', () => {
   it('trims float noise to at most two decimals', () => {
     expect(formatPresidioScore(0.8500000001)).toBe('0.85');
     expect(formatPresidioScore(0.123)).toBe('0.12');
+  });
+});
+
+describe('language detection helpers (ADR 0026)', () => {
+  it('languageLabel maps nb/en to friendly names, else the raw code', () => {
+    expect(languageLabel('nb')).toBe('Norwegian (nb)');
+    expect(languageLabel('en')).toBe('English (en)');
+    expect(languageLabel('de')).toBe('de');
+    expect(languageLabel(undefined)).toBe('—');
+  });
+
+  it('describeLanguageSource maps each source to a distinct reason + tone', () => {
+    expect(describeLanguageSource('franc_current_turn')).toEqual({
+      label: 'Detected by Franc (this text)',
+      tone: 'protective',
+    });
+    expect(describeLanguageSource('hint').label).toMatch(/UI-language hint/i);
+    expect(describeLanguageSource('hint').tone).toBe('measuring');
+    expect(describeLanguageSource('hint_default_en').label).toMatch(/Fallback to English/i);
+    expect(describeLanguageSource('hint_default_en').tone).toBe('inactive');
+    expect(describeLanguageSource('explicit').label).toMatch(/Pinned/i);
+    expect(describeLanguageSource('error_fallback').tone).toBe('inactive');
+    expect(describeLanguageSource(undefined).label).toBe('Unknown');
   });
 });

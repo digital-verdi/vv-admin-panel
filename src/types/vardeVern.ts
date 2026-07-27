@@ -120,9 +120,38 @@ export interface PresidioFinding {
   recognizer?: string;
 }
 
+/** How the ONE Presidio analysis language was decided (ADR 0026) — mirrors the proxy resolver source enum. */
+export type PresidioLanguageSource =
+  | 'single_enabled'
+  | 'explicit'
+  | 'franc_current_turn'
+  | 'franc_history_window'
+  | 'hint'
+  | 'hint_default_en'
+  | 'error_fallback';
+
 export interface PresidioTestResult {
   status: string;
   findings: PresidioFinding[];
+  /** ADR 0026 — the language this test was analyzed in + how it was decided (metadata only, no raw text).
+   *  Present on any proxy that exposes language routing; undefined on an older proxy. */
+  requestedLanguage?: 'auto' | 'nb' | 'en';
+  resolvedLanguage?: 'nb' | 'en';
+  languageResolutionSource?: PresidioLanguageSource;
+  sampleChars?: number;
+  /** The Franc best-minus-runner-up score gap — present only when Franc decided. */
+  scoreGap?: number;
+}
+
+/** Per-request Presidio language routing (ADR 0026): a local Franc detector picks ONE language (nb OR en)
+ *  per request. Read-only, env/IaC-derived — never operator-editable. Undefined when an older proxy has not
+ *  sent it yet (the panel falls back to a static "Franc (nb, en)" label). */
+export interface VardeVernLanguageRouting {
+  mode: string;
+  minimumChars: number;
+  minScoreGap?: number;
+  defaultLanguage?: string | null;
+  supportedLanguages: string[];
 }
 
 export interface VardeVern {
@@ -142,6 +171,8 @@ export interface VardeVern {
   enforceableGreen?: EnforceableGreen[];
   /** Read-only Presidio status (present once the proxy has the transport configured). */
   presidio?: PresidioStatus;
+  /** Read-only per-request language routing (ADR 0026). Undefined on older proxies. */
+  languageRouting?: VardeVernLanguageRouting;
   configRevision: number;
   dbBacked: boolean;
 }

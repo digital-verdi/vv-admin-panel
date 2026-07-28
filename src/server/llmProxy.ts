@@ -293,6 +293,92 @@ export const vardeVernInsightQueryOptions = (days: number) =>
     staleTime: 15_000,
   });
 
+// ── Varde Vern term rules (ADR 0028) ──────────────────────────────────────────────────────────────────
+export const getVardeVernCapabilitiesFn = createServerFn({ method: 'GET' }).handler(
+  async (): Promise<t.VardeVernCapabilities> => {
+    await requireCapability(SystemCapabilities.READ_CONFIGS);
+    const response = await proxyFetch('/admin/varde-vern/capabilities');
+    if (!response.ok) {
+      await extractProxyError(response, 'Failed to load Varde Vern capabilities');
+    }
+    return (await response.json()) as t.VardeVernCapabilities;
+  },
+);
+
+export const vardeVernCapabilitiesQueryOptions = queryOptions({
+  queryKey: ['varde-vern-capabilities'],
+  queryFn: () => getVardeVernCapabilitiesFn(),
+  staleTime: 5 * 60_000,
+});
+
+export const getTermRulesFn = createServerFn({ method: 'GET' }).handler(
+  async (): Promise<t.VardeVernTermRules> => {
+    await requireCapability(SystemCapabilities.READ_CONFIGS);
+    const response = await proxyFetch('/admin/varde-vern/term-rules');
+    if (!response.ok) {
+      await extractProxyError(response, 'Failed to load term rules');
+    }
+    return (await response.json()) as t.VardeVernTermRules;
+  },
+);
+
+export const termRulesQueryOptions = queryOptions({
+  queryKey: ['varde-vern-term-rules'],
+  queryFn: () => getTermRulesFn(),
+  staleTime: 15_000,
+});
+
+const createTermRuleSchema = z.object({
+  action: z.enum(['FORCE_MASK', 'DO_NOT_MASK']),
+  languageScope: z.enum(['ALL', 'LANGUAGE']),
+  languageCode: z.string().min(1).max(16).optional(),
+  term: z.string().min(1).max(512),
+});
+
+export const createTermRuleFn = createServerFn({ method: 'POST' })
+  .inputValidator(createTermRuleSchema)
+  .handler(async ({ data }): Promise<{ id: string }> => {
+    await requireCapability(SystemCapabilities.MANAGE_CONFIGS);
+    const response = await proxyFetch('/admin/varde-vern/term-rules', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      await extractProxyError(response, 'Failed to create term rule');
+    }
+    return (await response.json()) as { id: string };
+  });
+
+const setTermRuleEnabledSchema = z.object({ id: z.string().min(1).max(64), enabled: z.boolean() });
+
+export const setTermRuleEnabledFn = createServerFn({ method: 'POST' })
+  .inputValidator(setTermRuleEnabledSchema)
+  .handler(async ({ data }): Promise<void> => {
+    await requireCapability(SystemCapabilities.MANAGE_CONFIGS);
+    const response = await proxyFetch(
+      `/admin/varde-vern/term-rules/${encodeURIComponent(data.id)}`,
+      { method: 'PATCH', body: JSON.stringify({ enabled: data.enabled }) },
+    );
+    if (!response.ok) {
+      await extractProxyError(response, 'Failed to update term rule');
+    }
+  });
+
+const deleteTermRuleSchema = z.object({ id: z.string().min(1).max(64) });
+
+export const deleteTermRuleFn = createServerFn({ method: 'POST' })
+  .inputValidator(deleteTermRuleSchema)
+  .handler(async ({ data }): Promise<void> => {
+    await requireCapability(SystemCapabilities.MANAGE_CONFIGS);
+    const response = await proxyFetch(
+      `/admin/varde-vern/term-rules/${encodeURIComponent(data.id)}`,
+      { method: 'DELETE' },
+    );
+    if (!response.ok) {
+      await extractProxyError(response, 'Failed to delete term rule');
+    }
+  });
+
 const vernActionSchema = z.enum(['block', 'enforce', 'shadow', 'allow']);
 const saveVardeVernSchema = z.object({
   expectedRevision: z.number().int().min(0),

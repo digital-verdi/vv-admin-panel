@@ -256,3 +256,49 @@ export interface VardeVernInsight {
   entities: VardeVernInsightEntity[];
   rules: VardeVernInsightRule[];
 }
+
+/** Varde Vern term rules (ADR 0028) — language-scoped FORCE_MASK / DO_NOT_MASK. */
+export type TermRuleAction = 'FORCE_MASK' | 'DO_NOT_MASK';
+export type TermRuleLanguageScopeKind = 'ALL' | 'LANGUAGE';
+
+export interface VardeVernLanguageCapability {
+  code: string;
+  displayNameKey: string;
+  displayName: string;
+  enabled: boolean;
+  detection: { localEngine: boolean; presidio: boolean };
+  termRules: { supported: boolean };
+}
+
+export type VardeVernRuleLanguageScope =
+  | { type: 'ALL' }
+  | { type: 'LANGUAGE'; languageCode: string };
+
+export interface VardeVernCapabilities {
+  languages: VardeVernLanguageCapability[];
+  termRuleLanguageScopes: VardeVernRuleLanguageScope[];
+  termRuleActions: TermRuleAction[];
+  defaultLanguage: string;
+}
+
+export interface VardeVernTermRule {
+  id: string;
+  action: TermRuleAction;
+  languageScope: TermRuleLanguageScopeKind;
+  languageCode: string | null;
+  term: string;
+  enabled: boolean;
+  createdBy: string | null;
+  createdAt: string;
+}
+
+export interface VardeVernTermRules {
+  rules: VardeVernTermRule[];
+}
+
+export interface CreateTermRuleInput {
+  action: TermRuleAction;
+  languageScope: TermRuleLanguageScopeKind;
+  languageCode?: string;
+  term: string;
+}

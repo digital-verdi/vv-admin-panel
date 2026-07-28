@@ -23,9 +23,10 @@ import { SystemCapabilities } from '@/constants';
 import { InsightPanel } from './InsightPanel';
 import { PresidioPanel } from './PresidioPanel';
 import { PresidioStatusCard } from './PresidioStatusCard';
+import { TermRulesPanel } from './TermRulesPanel';
 import { useCapabilities } from '@/hooks';
 
-type SubTab = 'overview' | 'local' | 'presidio' | 'insight';
+type SubTab = 'overview' | 'local' | 'presidio' | 'termrules' | 'insight';
 
 // Authoritative (regex) entities may never be weaker than enforce (ADR 0005) → enforce/block only.
 const REGEX_ACTIONS: t.SelectOption[] = [
@@ -89,7 +90,13 @@ function globalStatusBadge(piiEnabled?: boolean): { tone: Tone; label: string } 
 }
 
 function isSubTab(v: string): v is SubTab {
-  return v === 'overview' || v === 'local' || v === 'presidio' || v === 'insight';
+  return (
+    v === 'overview' ||
+    v === 'local' ||
+    v === 'presidio' ||
+    v === 'termrules' ||
+    v === 'insight'
+  );
 }
 
 export function VardeVernPage() {
@@ -431,11 +438,13 @@ export function VardeVernPage() {
           <Tabs.Trigger value="overview">Overview</Tabs.Trigger>
           <Tabs.Trigger value="local">Local PII engine</Tabs.Trigger>
           <Tabs.Trigger value="presidio">Presidio Analyzer</Tabs.Trigger>
+          <Tabs.Trigger value="termrules">Term rules</Tabs.Trigger>
           <Tabs.Trigger value="insight">Insight</Tabs.Trigger>
         </Tabs.TriggersList>
         <Tabs.Content value="overview" tabIndex={-1} />
         <Tabs.Content value="local" tabIndex={-1} />
         <Tabs.Content value="presidio" tabIndex={-1} />
+        <Tabs.Content value="termrules" tabIndex={-1} />
         <Tabs.Content value="insight" tabIndex={-1} />
       </Tabs>
 
@@ -831,6 +840,12 @@ export function VardeVernPage() {
               presidioStatus={savedPresidio?.status ?? 'disabled'}
             />
           </Section>
+        </div>
+      )}
+
+      {subTab === 'termrules' && (
+        <div className="flex flex-col gap-4">
+          <TermRulesPanel canManage={canManage} />
         </div>
       )}
 

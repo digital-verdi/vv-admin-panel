@@ -53,7 +53,7 @@ export function GroupCard({
           />
         </div>
         {isDefault && (
-          <span className="shrink-0 rounded-full bg-(--cui-color-background-accent-muted) px-2 py-0.5 text-xs font-medium text-(--cui-color-text-accent)">
+          <span className="shrink-0 rounded-full bg-(--cui-color-feedback-info-bg) px-2 py-0.5 text-xs font-medium text-(--cui-color-feedback-info-fg)">
             Default
           </span>
         )}

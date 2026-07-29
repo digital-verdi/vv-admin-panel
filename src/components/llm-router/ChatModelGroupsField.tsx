@@ -170,7 +170,7 @@ export function ChatModelGroupsField({
           />
         )}
         {!del.fold && (
-          <p role="note" className="text-xs text-(--cui-color-text-warning)">
+          <p role="note" className="text-xs text-(--cui-color-feedback-warning-fg)">
             Without folding, any model spec still pointing at this group&apos;s name will become
             unresolved.
           </p>

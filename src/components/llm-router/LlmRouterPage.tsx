@@ -162,7 +162,7 @@ export function LlmRouterPage() {
   const euCoverageMessage = (() => {
     if (!config.euRouting?.mistralConfigured) {
       return (
-        <p role="alert" className="text-(--cui-color-text-warning)">
+        <p role="alert" className="text-(--cui-color-feedback-warning-fg)">
           European routing is enabled, but Mistral Direct is not configured. Groups cannot get
           European coverage until a Mistral key is provisioned.
         </p>
@@ -170,7 +170,7 @@ export function LlmRouterPage() {
     }
     if (euGroupsMissingCoverage.length > 0) {
       return (
-        <p role="alert" className="text-(--cui-color-text-warning)">
+        <p role="alert" className="text-(--cui-color-feedback-warning-fg)">
           European routing is enabled: each group needs an approved European (Mistral) model, or a
           save will be rejected. Missing coverage: {euGroupsMissingCoverage.join(', ')}.
         </p>
@@ -290,7 +290,7 @@ export function LlmRouterPage() {
         <span
           className={
             config.isActive
-              ? 'shrink-0 rounded-full bg-(--cui-color-background-success) px-2.5 py-1 text-xs font-medium text-(--cui-color-text-success)'
+              ? 'shrink-0 rounded-full bg-(--cui-color-feedback-success-bg) px-2.5 py-1 text-xs font-medium text-(--cui-color-feedback-success-fg)'
               : 'shrink-0 rounded-full bg-(--cui-color-background-muted) px-2.5 py-1 text-xs font-medium text-(--cui-color-text-muted)'
           }
         >
@@ -301,7 +301,7 @@ export function LlmRouterPage() {
       {proxyReadOnly && (
         <div
           role="alert"
-          className="flex items-start gap-2 rounded-lg border border-(--cui-color-stroke-warning) bg-(--cui-color-background-warning) p-3 text-sm text-(--cui-color-text-warning)"
+          className="flex items-start gap-2 rounded-lg border border-(--cui-color-feedback-warning-fg) bg-(--cui-color-feedback-warning-bg) p-3 text-sm text-(--cui-color-feedback-warning-fg)"
         >
           <Icon name="warning" size="sm" />
           <span>
@@ -494,7 +494,7 @@ export function LlmRouterPage() {
       {syncNotice && (
         <div
           role="alert"
-          className="flex items-center justify-between gap-3 rounded-lg border border-(--cui-color-stroke-warning) bg-(--cui-color-background-warning) p-3 text-sm text-(--cui-color-text-warning)"
+          className="flex items-center justify-between gap-3 rounded-lg border border-(--cui-color-feedback-warning-fg) bg-(--cui-color-feedback-warning-bg) p-3 text-sm text-(--cui-color-feedback-warning-fg)"
         >
           <span>{syncNotice.message}</span>
           {syncNotice.retry && (

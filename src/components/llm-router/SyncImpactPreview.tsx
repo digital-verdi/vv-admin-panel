@@ -38,7 +38,7 @@ export function SyncImpactPreview({ chatRouting }: SyncImpactPreviewProps) {
   if ('error' in plan) {
     return (
       <div role="note" className={box}>
-        <p className="text-(--cui-color-text-warning)">
+        <p className="text-(--cui-color-feedback-warning-fg)">
           {plan.error === 'missing'
             ? "No Varde (vv-llm-proxy) endpoint found in the LibreChat config — routing will save to the proxy, but LibreChat won't be synced automatically."
             : 'Multiple “Varde” endpoints found — resolve the duplicate in the Configuration editor before the sync can run.'}
@@ -84,7 +84,7 @@ export function SyncImpactPreview({ chatRouting }: SyncImpactPreviewProps) {
         <p className="text-(--cui-color-text-muted)">No LibreChat changes needed.</p>
       )}
       {plan.unresolvedSpecs.length > 0 && (
-        <p role="note" className="mt-2 text-(--cui-color-text-warning)">
+        <p role="note" className="mt-2 text-(--cui-color-feedback-warning-fg)">
           {plan.unresolvedSpecs
             .map((s) => `Spec “${s.name}” points at “${s.model}”, which maps to no group`)
             .join('; ')}

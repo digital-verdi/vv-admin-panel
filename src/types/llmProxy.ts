@@ -5,12 +5,18 @@ export type LlmProviderMode = 'openrouter' | 'mock';
 /** A provider the proxy can route to. Chat-model groups are provider-explicit (routing v3). */
 export type ModelProvider = 'openrouter' | 'mistral' | 'mock';
 
+/** Where a model's egress is processed (routing v4, ADR 0029). Mistral Direct is `eu`; OpenRouter never is. */
+export type ProcessingRegion = 'eu' | 'global' | 'unknown';
+
 /** A provider-explicit model reference — the proxy wire shape (routing v3). In the panel's UI state these
  *  are encoded as the composite string `"<provider>:<model>"` (a `ChatModelGroup.models` entry) and only
  *  converted to/from `ModelRef` at the proxy-server boundary (see `server/llmProxy.ts`). */
 export interface ModelRef {
   provider: ModelProvider;
   model: string;
+  /** Routing v4 (ADR 0029). Derived from the provider on write (mistral→eu, else global); the proxy also
+   *  back-fills it from a v3-shaped body, so the region is never a free choice in iteration 1. */
+  processingRegion: ProcessingRegion;
 }
 
 /**
@@ -71,9 +77,25 @@ export interface LlmProxyConfig extends LlmProxyConfigInput {
   proxyApiV2: boolean;
   /** The default group's id + current name, for LibreChat titleModel / default-spec sync. */
   defaultGroup: { id: string; name: string };
+  /** EU-routing status (ADR 0029) — surfaced so the panel can show which groups need an EU candidate. */
+  euRouting?: EuRoutingStatus;
   updatedAt: string | null;
   updatedBy: string | null;
   dbBacked: boolean;
+}
+
+/** Read-only EU-routing coverage status from GET /admin/config (ADR 0029). */
+export interface EuRoutingStatus {
+  /** Whether the proxy has EU routing enabled (the coverage requirement is enforced on write when true). */
+  enabled: boolean;
+  /** The approved European provider (iteration 1: 'mistral' = Mistral Direct). */
+  requiredProvider: string;
+  /** Whether Mistral Direct is configured (a key is present) — an EU-tagged ref is unreachable without it. */
+  mistralConfigured: boolean;
+  /** Whether every group carries an approved EU candidate. */
+  allGroupsHaveEuCoverage: boolean;
+  /** The ids of groups lacking an EU candidate — these block a save while EU routing is enabled. */
+  groupsMissingEuCoverage: string[];
 }
 
 /** Discriminated result of a proxy config save: `ok` (with the new revision) or an optimistic-lock miss. */

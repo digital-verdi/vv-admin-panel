@@ -154,6 +154,34 @@ export function LlmRouterPage() {
     form.chatRouting.groups,
     form.chatRouting.defaultGroupId,
   );
+  // Live EU coverage (ADR 0029): a group is covered when a model composite is provider-tagged `mistral:`
+  // (Mistral Direct = the approved European path). Computed from the CURRENT edits, not the saved config.
+  const euGroupsMissingCoverage = form.chatRouting.groups
+    .filter((group) => !group.models.some((composite) => composite.startsWith('mistral:')))
+    .map((group) => group.name);
+  const euCoverageMessage = (() => {
+    if (!config.euRouting?.mistralConfigured) {
+      return (
+        <p role="alert" className="text-(--cui-color-text-warning)">
+          European routing is enabled, but Mistral Direct is not configured. Groups cannot get
+          European coverage until a Mistral key is provisioned.
+        </p>
+      );
+    }
+    if (euGroupsMissingCoverage.length > 0) {
+      return (
+        <p role="alert" className="text-(--cui-color-text-warning)">
+          European routing is enabled: each group needs an approved European (Mistral) model, or a
+          save will be rejected. Missing coverage: {euGroupsMissingCoverage.join(', ')}.
+        </p>
+      );
+    }
+    return (
+      <p className="text-(--cui-color-text-muted)">
+        All groups have an approved European (Mistral) candidate.
+      </p>
+    );
+  })();
   const canSave = canManage && !proxyReadOnly && invariantErrors.length === 0 && !busy;
 
   const keyStatusLabel = (() => {
@@ -370,6 +398,9 @@ export function LlmRouterPage() {
             ))}
           </ul>
         )}
+        {config.euRouting?.enabled && !groupsDisabled ? (
+          <div className="mt-3 text-xs">{euCoverageMessage}</div>
+        ) : null}
         <div className="mt-3">
           <SyncImpactPreview chatRouting={form.chatRouting} />
         </div>

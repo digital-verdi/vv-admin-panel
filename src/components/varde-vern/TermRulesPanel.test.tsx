@@ -165,6 +165,41 @@ describe('TermRulesPanel', () => {
     );
   });
 
+  it('shows the EU routingAction dropdown only when the proxy advertises it, and submits the choice', async () => {
+    termRulesFn.mockResolvedValue({ rules: [] });
+    capsFn.mockResolvedValue({
+      ...CAPS,
+      termRuleRoutingActions: ['NONE', 'RECOMMEND_EU', 'REQUIRE_EU'],
+    });
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={qc}>
+        <TermRulesPanel canManage={true} />
+      </QueryClientProvider>,
+    );
+    await screen.findByText('Add a global term rule');
+    const routingSelect = document.querySelectorAll('select')[2] as HTMLSelectElement;
+    expect(routingSelect).toBeTruthy();
+    fireEvent.change(routingSelect, { target: { value: 'REQUIRE_EU' } });
+    fireEvent.change(screen.getByPlaceholderText('e.g. a project name'), {
+      target: { value: 'Prosjekt X' },
+    });
+    fireEvent.click(screen.getByText('Add rule'));
+    await waitFor(() =>
+      expect(createFn).toHaveBeenCalledWith({
+        data: {
+          action: 'FORCE_MASK',
+          routingAction: 'REQUIRE_EU',
+          languageScope: 'ALL',
+          languageCode: undefined,
+          term: 'Prosjekt X',
+        },
+      }),
+    );
+  });
+
   it('toggle + delete call the mutation server-fns with the rule id', async () => {
     const rule: t.VardeVernTermRule = {
       id: 'r1',

@@ -28,13 +28,21 @@ const MODEL_PROVIDERS: readonly t.ModelProvider[] = ['openrouter', 'mistral', 'm
  * recognized provider prefix (a custom id typed via the combobox) defaults to OpenRouter — always present,
  * the common case. Split on the FIRST `:` only (OpenRouter ids use `/`, so the model part is preserved).
  */
+/** Routing v4 (ADR 0029): the region is a pure function of the provider in iteration 1 (Mistral Direct is
+ *  the only approved EU path). The proxy back-fills the same value from a v3-shaped body. */
+function deriveProcessingRegion(provider: t.ModelProvider): t.ProcessingRegion {
+  return provider === 'mistral' ? 'eu' : 'global';
+}
+
 export function compositeToRef(composite: string): t.ModelRef {
   const i = composite.indexOf(':');
   if (i > 0) {
     const provider = composite.slice(0, i) as t.ModelProvider;
-    if (MODEL_PROVIDERS.includes(provider)) return { provider, model: composite.slice(i + 1) };
+    if (MODEL_PROVIDERS.includes(provider)) {
+      return { provider, model: composite.slice(i + 1), processingRegion: deriveProcessingRegion(provider) };
+    }
   }
-  return { provider: 'openrouter', model: composite };
+  return { provider: 'openrouter', model: composite, processingRegion: 'global' };
 }
 
 /** Encode a proxy wire `ModelRef` as the UI composite key. */
@@ -153,6 +161,7 @@ interface RawProxyCommon {
 interface RawProxyV2 extends RawProxyCommon {
   chatRouting: WireRouting;
   defaultGroup: { id: string; name: string };
+  euRouting?: t.EuRoutingStatus;
   configRevision: number;
 }
 
@@ -330,6 +339,7 @@ export const termRulesQueryOptions = queryOptions({
 
 const createTermRuleSchema = z.object({
   action: z.enum(['FORCE_MASK', 'DO_NOT_MASK']),
+  routingAction: z.enum(['NONE', 'RECOMMEND_EU', 'REQUIRE_EU']).optional(),
   languageScope: z.enum(['ALL', 'LANGUAGE']),
   languageCode: z.string().min(1).max(16).optional(),
   term: z.string().min(1).max(512),
@@ -478,10 +488,10 @@ export const saveLlmProxyConfigFn = createServerFn({ method: 'POST' })
   .handler(async ({ data }): Promise<t.SaveLlmProxyResult> => {
     // Overwrites the live chat-routing config → MANAGE_CONFIGS (closes the same pre-existing gap).
     await requireCapability(SystemCapabilities.MANAGE_CONFIGS);
-    // Convert the UI composite `provider:model` keys to provider-explicit ModelRefs + stamp routing v3
-    // (the proxy's PUT requires version 3). Everything else passes through unchanged.
+    // Convert the UI composite `provider:model` keys to provider- + region-explicit ModelRefs (routing v4,
+    // ADR 0029; the region is derived from the provider). Everything else passes through unchanged.
     const chatRouting: WireRouting = {
-      version: 3,
+      version: 4,
       defaultGroupId: data.chatRouting.defaultGroupId,
       groups: data.chatRouting.groups.map((group) => ({
         id: group.id,

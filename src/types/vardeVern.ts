@@ -259,6 +259,9 @@ export interface VardeVernInsight {
 
 /** Varde Vern term rules (ADR 0028) — language-scoped FORCE_MASK / DO_NOT_MASK. */
 export type TermRuleAction = 'FORCE_MASK' | 'DO_NOT_MASK';
+
+/** The EU-routing axis on a GLOBAL term rule (ADR 0029), orthogonal to the masking action. */
+export type TermRuleRoutingAction = 'NONE' | 'RECOMMEND_EU' | 'REQUIRE_EU';
 export type TermRuleLanguageScopeKind = 'ALL' | 'LANGUAGE';
 
 export interface VardeVernLanguageCapability {
@@ -278,12 +281,16 @@ export interface VardeVernCapabilities {
   languages: VardeVernLanguageCapability[];
   termRuleLanguageScopes: VardeVernRuleLanguageScope[];
   termRuleActions: TermRuleAction[];
+  /** The EU-routing axis choices (ADR 0029). Optional for backward compatibility with an older proxy. */
+  termRuleRoutingActions?: TermRuleRoutingAction[];
   defaultLanguage: string;
 }
 
 export interface VardeVernTermRule {
   id: string;
   action: TermRuleAction;
+  /** EU-routing axis (ADR 0029). Absent on an older proxy → treated as 'NONE'. */
+  routingAction?: TermRuleRoutingAction;
   languageScope: TermRuleLanguageScopeKind;
   languageCode: string | null;
   term: string;
@@ -298,6 +305,7 @@ export interface VardeVernTermRules {
 
 export interface CreateTermRuleInput {
   action: TermRuleAction;
+  routingAction?: TermRuleRoutingAction;
   languageScope: TermRuleLanguageScopeKind;
   languageCode?: string;
   term: string;

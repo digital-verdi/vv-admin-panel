@@ -24,6 +24,12 @@ function actionLabel(action: t.TermRuleAction): string {
   return action === 'FORCE_MASK' ? 'Always mask' : 'Never mask';
 }
 
+function routingActionLabel(action: t.TermRuleRoutingAction): string {
+  if (action === 'REQUIRE_EU') return 'Require EU processing';
+  if (action === 'RECOMMEND_EU') return 'Recommend EU processing';
+  return 'No routing';
+}
+
 interface RowProps {
   rule: t.VardeVernTermRule;
   caps: t.VardeVernCapabilities | undefined;
@@ -79,8 +85,12 @@ export function TermRulesPanel({ canManage = false }: TermRulesPanelProps) {
   const { data: caps } = useQuery(vardeVernCapabilitiesQueryOptions);
 
   const [action, setAction] = useState<t.TermRuleAction>('FORCE_MASK');
+  const [routingAction, setRoutingAction] = useState<t.TermRuleRoutingAction>('NONE');
   const [scope, setScope] = useState<string>(ALL);
   const [term, setTerm] = useState('');
+  // EU-routing axis (ADR 0029). Shown only when the proxy advertises it (an older proxy omits it).
+  const routingActions = caps?.termRuleRoutingActions;
+  const showRouting = Array.isArray(routingActions) && routingActions.length > 1;
 
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: termRulesQueryOptions.queryKey });
@@ -120,6 +130,7 @@ export function TermRulesPanel({ canManage = false }: TermRulesPanelProps) {
     if (trimmed.length === 0 || !canManage || busy) return;
     create.mutate({
       action,
+      routingAction: showRouting && routingAction !== 'NONE' ? routingAction : undefined,
       languageScope: scope === ALL ? 'ALL' : 'LANGUAGE',
       languageCode: scope === ALL ? undefined : scope,
       term: trimmed,
@@ -168,6 +179,23 @@ export function TermRulesPanel({ canManage = false }: TermRulesPanelProps) {
               </select>
             </label>
           </div>
+          {showRouting ? (
+            <label className="flex flex-col gap-1 text-xs">
+              <span className="text-(--cui-color-text-muted)">European processing (Varde Rute)</span>
+              <select
+                value={routingAction}
+                disabled={!canManage}
+                onChange={(e) => setRoutingAction(e.target.value as t.TermRuleRoutingAction)}
+                className="rounded-md border border-(--cui-color-stroke-default) bg-transparent px-2 py-1.5 text-sm"
+              >
+                {(routingActions ?? ['NONE']).map((ra) => (
+                  <option key={ra} value={ra}>
+                    {routingActionLabel(ra)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           <TextField
             label="Word or phrase"
             value={term}
@@ -200,6 +228,9 @@ export function TermRulesPanel({ canManage = false }: TermRulesPanelProps) {
                 <Badge tone={rule.action === 'FORCE_MASK' ? 'protective' : 'inactive'}>
                   {actionLabel(rule.action)}
                 </Badge>
+                {rule.routingAction && rule.routingAction !== 'NONE' ? (
+                  <Badge tone="measuring">{routingActionLabel(rule.routingAction)}</Badge>
+                ) : null}
                 <div className="flex-1">
                   <TermRuleRow
                     rule={rule}

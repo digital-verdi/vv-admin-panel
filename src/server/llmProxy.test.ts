@@ -47,19 +47,19 @@ function wireGroups(): Array<{
     {
       id: 'premium',
       name: 'premium',
-      models: [{ provider: 'openrouter', model: 'p1' }],
+      models: [{ provider: 'openrouter', model: 'p1', processingRegion: 'global' }],
       legacyNames: [],
     },
     {
       id: 'standard',
       name: 'standard',
-      models: [{ provider: 'mistral', model: 's1' }],
+      models: [{ provider: 'mistral', model: 's1', processingRegion: 'eu' }],
       legacyNames: [],
     },
     {
       id: 'basic',
       name: 'basic',
-      models: [{ provider: 'openrouter', model: 'b1' }],
+      models: [{ provider: 'openrouter', model: 'b1', processingRegion: 'global' }],
       legacyNames: [],
     },
   ];
@@ -110,27 +110,33 @@ describe('validateGroupsInvariants', () => {
 });
 
 describe('compositeToRef / refToComposite', () => {
-  it('round-trips a provider-tagged model key', () => {
+  it('round-trips a provider-tagged model key (v4: region derived from provider)', () => {
     expect(compositeToRef('mistral:mistral-large-latest')).toEqual({
       provider: 'mistral',
       model: 'mistral-large-latest',
+      processingRegion: 'eu',
     });
     // OpenRouter ids contain `/`, never `:`, so the model part is preserved (split on the first `:`).
     expect(compositeToRef('openrouter:openai/gpt-4o')).toEqual({
       provider: 'openrouter',
       model: 'openai/gpt-4o',
+      processingRegion: 'global',
     });
-    expect(refToComposite({ provider: 'mistral', model: 'x' })).toBe('mistral:x');
+    expect(refToComposite({ provider: 'mistral', model: 'x', processingRegion: 'eu' })).toBe(
+      'mistral:x',
+    );
   });
 
   it('defaults an unprefixed / unknown-provider id to OpenRouter (custom-typed model)', () => {
     expect(compositeToRef('openai/gpt-5')).toEqual({
       provider: 'openrouter',
       model: 'openai/gpt-5',
+      processingRegion: 'global',
     });
     expect(compositeToRef('anthropic:claude')).toEqual({
       provider: 'openrouter',
       model: 'anthropic:claude',
+      processingRegion: 'global',
     });
   });
 });
@@ -153,6 +159,25 @@ describe('normalizeProxyConfig', () => {
       ['standard', ['mistral:s1']],
       ['basic', ['openrouter:b1']],
     ]);
+  });
+
+  it('passes through the euRouting status (ADR 0029) for the coverage banner', () => {
+    const raw = {
+      ...commonRaw,
+      chatRouting: { version: 4, defaultGroupId: 'standard', groups: wireGroups() },
+      defaultGroup: { id: 'standard', name: 'standard' },
+      euRouting: {
+        enabled: true,
+        requiredProvider: 'mistral',
+        mistralConfigured: true,
+        allGroupsHaveEuCoverage: false,
+        groupsMissingEuCoverage: ['premium', 'basic'],
+      },
+      configRevision: 7,
+    };
+    const config = normalizeProxyConfig(raw);
+    expect(config.euRouting?.enabled).toBe(true);
+    expect(config.euRouting?.groupsMissingEuCoverage).toEqual(['premium', 'basic']);
   });
 
   it('maps an old v1 response (3 tier arrays) into read-only OpenRouter-tagged pseudo-groups', () => {

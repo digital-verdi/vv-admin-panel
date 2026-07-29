@@ -139,7 +139,7 @@ export function PresidioPanel({
         <h3 className="mb-2 text-sm font-semibold text-(--cui-color-title-default)">Test studio</h3>
         <div
           role="alert"
-          className="mb-3 flex items-start gap-2 rounded-md border border-(--cui-color-stroke-warning) bg-(--cui-color-background-warning) p-2 text-xs text-(--cui-color-text-warning)"
+          className="mb-3 flex items-start gap-2 rounded-md border border-(--cui-color-feedback-warning-fg) bg-(--cui-color-feedback-warning-bg) p-2 text-xs text-(--cui-color-feedback-warning-fg)"
         >
           <Icon name="warning" size="sm" />
           <span>Use SYNTHETIC data only — never paste real personal information.</span>

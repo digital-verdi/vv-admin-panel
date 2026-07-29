@@ -154,6 +154,35 @@ export function LlmRouterPage() {
     form.chatRouting.groups,
     form.chatRouting.defaultGroupId,
   );
+  // Live EU coverage (ADR 0029): a group is covered when a model composite is provider-tagged `mistral:`
+  // (Mistral Direct = the approved European path). Computed from the CURRENT edits, not the saved config.
+  const euGroupsMissingCoverage = form.chatRouting.groups
+    .filter((group) => !group.models.some((composite) => composite.startsWith('mistral:')))
+    .map((group) => group.name);
+  const euCoverageMessage = (() => {
+    if (!config.euRouting?.mistralConfigured) {
+      return (
+        <p role="alert" className="text-(--cui-color-feedback-warning-fg)">
+          European routing is enabled, but Mistral Direct is not configured. Groups cannot get
+          European coverage until a Mistral key is provisioned.
+        </p>
+      );
+    }
+    if (euGroupsMissingCoverage.length > 0) {
+      return (
+        <p role="alert" className="text-(--cui-color-feedback-warning-fg)">
+          European routing is enabled: every group must have an approved European (Mistral Direct)
+          candidate, or a save will be rejected. Groups missing EU coverage:{' '}
+          {euGroupsMissingCoverage.join(', ')}.
+        </p>
+      );
+    }
+    return (
+      <p className="text-(--cui-color-text-muted)">
+        All groups have an approved European (Mistral Direct) candidate.
+      </p>
+    );
+  })();
   const canSave = canManage && !proxyReadOnly && invariantErrors.length === 0 && !busy;
 
   const keyStatusLabel = (() => {
@@ -262,7 +291,7 @@ export function LlmRouterPage() {
         <span
           className={
             config.isActive
-              ? 'shrink-0 rounded-full bg-(--cui-color-background-success) px-2.5 py-1 text-xs font-medium text-(--cui-color-text-success)'
+              ? 'shrink-0 rounded-full bg-(--cui-color-feedback-success-bg) px-2.5 py-1 text-xs font-medium text-(--cui-color-feedback-success-fg)'
               : 'shrink-0 rounded-full bg-(--cui-color-background-muted) px-2.5 py-1 text-xs font-medium text-(--cui-color-text-muted)'
           }
         >
@@ -273,7 +302,7 @@ export function LlmRouterPage() {
       {proxyReadOnly && (
         <div
           role="alert"
-          className="flex items-start gap-2 rounded-lg border border-(--cui-color-stroke-warning) bg-(--cui-color-background-warning) p-3 text-sm text-(--cui-color-text-warning)"
+          className="flex items-start gap-2 rounded-lg border border-(--cui-color-feedback-warning-fg) bg-(--cui-color-feedback-warning-bg) p-3 text-sm text-(--cui-color-feedback-warning-fg)"
         >
           <Icon name="warning" size="sm" />
           <span>
@@ -370,6 +399,9 @@ export function LlmRouterPage() {
             ))}
           </ul>
         )}
+        {config.euRouting?.enabled && !groupsDisabled ? (
+          <div className="mt-3 text-xs">{euCoverageMessage}</div>
+        ) : null}
         <div className="mt-3">
           <SyncImpactPreview chatRouting={form.chatRouting} />
         </div>
@@ -463,7 +495,7 @@ export function LlmRouterPage() {
       {syncNotice && (
         <div
           role="alert"
-          className="flex items-center justify-between gap-3 rounded-lg border border-(--cui-color-stroke-warning) bg-(--cui-color-background-warning) p-3 text-sm text-(--cui-color-text-warning)"
+          className="flex items-center justify-between gap-3 rounded-lg border border-(--cui-color-feedback-warning-fg) bg-(--cui-color-feedback-warning-bg) p-3 text-sm text-(--cui-color-feedback-warning-fg)"
         >
           <span>{syncNotice.message}</span>
           {syncNotice.retry && (

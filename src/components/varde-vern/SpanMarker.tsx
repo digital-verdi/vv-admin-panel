@@ -3,8 +3,8 @@ import type { Tone } from './operations';
 import { cn } from '@/utils';
 
 const MARK_CLASS: Record<Tone, string> = {
-  protective: 'bg-(--cui-color-background-success) text-(--cui-color-text-success)',
-  measuring: 'bg-(--cui-color-background-accent-muted) text-(--cui-color-text-accent)',
+  protective: 'bg-(--cui-color-feedback-success-bg) text-(--cui-color-feedback-success-fg)',
+  measuring: 'bg-(--cui-color-feedback-info-bg) text-(--cui-color-feedback-info-fg)',
   inactive: 'bg-(--cui-color-background-muted) text-(--cui-color-text-muted)',
 };
 

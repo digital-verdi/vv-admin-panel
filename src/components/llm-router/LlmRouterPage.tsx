@@ -179,7 +179,7 @@ export function LlmRouterPage() {
     }
     return (
       <p className="text-(--cui-color-text-muted)">
-        All groups have an approved European (Mistral) candidate.
+        All groups have an approved European (Mistral Direct) candidate.
       </p>
     );
   })();

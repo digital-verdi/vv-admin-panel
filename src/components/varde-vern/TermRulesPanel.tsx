@@ -229,7 +229,7 @@ export function TermRulesPanel({ canManage = false }: TermRulesPanelProps) {
                   {actionLabel(rule.action)}
                 </Badge>
                 {rule.routingAction && rule.routingAction !== 'NONE' ? (
-                  <Badge tone="protective">{routingActionLabel(rule.routingAction)}</Badge>
+                  <Badge tone="measuring">{routingActionLabel(rule.routingAction)}</Badge>
                 ) : null}
                 <div className="flex-1">
                   <TermRuleRow

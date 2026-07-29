@@ -171,8 +171,9 @@ export function LlmRouterPage() {
     if (euGroupsMissingCoverage.length > 0) {
       return (
         <p role="alert" className="text-(--cui-color-feedback-warning-fg)">
-          European routing is enabled: each group needs an approved European (Mistral) model, or a
-          save will be rejected. Missing coverage: {euGroupsMissingCoverage.join(', ')}.
+          European routing is enabled: every group must have an approved European (Mistral Direct)
+          candidate, or a save will be rejected. Groups missing EU coverage:{' '}
+          {euGroupsMissingCoverage.join(', ')}.
         </p>
       );
     }

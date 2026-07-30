@@ -9,6 +9,7 @@ import {
   setTermRuleEnabledFn,
   deleteTermRuleFn,
 } from '@/server';
+import { describeTermRuleOutcome, termRuleOutcomeText } from './operations';
 import { EmptyState, LoadingState } from '@/components/shared';
 import { notifySuccess, notifyError } from '@/utils';
 import { Section, Badge } from './ui';
@@ -42,28 +43,43 @@ interface RowProps {
 function TermRuleRow({ rule, caps, canManage, onToggle, onDelete, busy }: RowProps) {
   const scope =
     rule.languageScope === 'ALL' ? 'All languages' : languageLabel(caps, rule.languageCode);
+  const outcome = rule.enabled
+    ? termRuleOutcomeText(describeTermRuleOutcome(rule))
+    : 'Disabled — this rule has no effect while turned off.';
   return (
-    <div className="flex items-center gap-3 border-t border-(--cui-color-stroke-default) py-2 text-sm">
-      <span className="flex-1 truncate">
-        <span className="font-medium text-(--cui-color-title-default)">{rule.term}</span>
-        <span className="ml-2 text-xs text-(--cui-color-text-muted)">{scope}</span>
-      </span>
-      {rule.createdBy ? (
-        <span className="text-xs text-(--cui-color-text-muted)">by {rule.createdBy}</span>
-      ) : null}
-      <Switch
-        checked={rule.enabled}
-        disabled={!canManage || busy}
-        onCheckedChange={() => onToggle(rule.id, !rule.enabled)}
-        aria-label={`${rule.enabled ? 'Disable' : 'Enable'} the rule for ${rule.term}`}
-      />
-      <IconButton
-        icon="trash"
-        type="ghost"
-        disabled={!canManage || busy}
-        onClick={() => onDelete(rule.id)}
-        aria-label={`Delete the rule for ${rule.term}`}
-      />
+    <div className="border-t border-(--cui-color-stroke-default) py-2 text-sm">
+      <div className="flex items-center gap-2">
+        <Badge tone={rule.action === 'FORCE_MASK' ? 'protective' : 'inactive'}>
+          {actionLabel(rule.action)}
+        </Badge>
+        {rule.routingAction && rule.routingAction !== 'NONE' ? (
+          <Badge tone="measuring">{routingActionLabel(rule.routingAction)}</Badge>
+        ) : null}
+        <span className="flex-1 truncate">
+          <span className="font-medium text-(--cui-color-title-default)">{rule.term}</span>
+          <span className="ml-2 text-xs text-(--cui-color-text-muted)">{scope}</span>
+        </span>
+        {rule.createdBy ? (
+          <span className="text-xs text-(--cui-color-text-muted)">by {rule.createdBy}</span>
+        ) : null}
+        <Switch
+          checked={rule.enabled}
+          disabled={!canManage || busy}
+          onCheckedChange={() => onToggle(rule.id, !rule.enabled)}
+          aria-label={`${rule.enabled ? 'Disable' : 'Enable'} the rule for ${rule.term}`}
+        />
+        <IconButton
+          icon="trash"
+          type="ghost"
+          disabled={!canManage || busy}
+          onClick={() => onDelete(rule.id)}
+          aria-label={`Delete the rule for ${rule.term}`}
+        />
+      </div>
+      <p className="mt-1 text-xs text-(--cui-color-text-muted)">
+        <span className="font-medium">Effective outcome: </span>
+        {outcome}
+      </p>
     </div>
   );
 }
@@ -137,6 +153,10 @@ export function TermRulesPanel({ canManage = false }: TermRulesPanelProps) {
     });
   };
 
+  const previewOutcome = termRuleOutcomeText(
+    describeTermRuleOutcome({ action, routingAction: showRouting ? routingAction : 'NONE' }),
+  );
+
   if (isLoading) return <LoadingState />;
   if (isError || !rulesData) {
     return <EmptyState message="Could not load the term rules." />;
@@ -204,6 +224,14 @@ export function TermRulesPanel({ canManage = false }: TermRulesPanelProps) {
             placeholder="e.g. a project name"
             onChange={(value) => setTerm(value)}
           />
+          <div
+            role="status"
+            className="rounded-md bg-(--cui-color-background-muted) px-3 py-2 text-xs text-(--cui-color-text-muted)"
+            aria-label="Effective outcome preview"
+          >
+            <span className="font-medium text-(--cui-color-text-default)">Effective outcome: </span>
+            {previewOutcome}
+          </div>
           <div>
             <Button
               type="primary"
@@ -224,24 +252,15 @@ export function TermRulesPanel({ canManage = false }: TermRulesPanelProps) {
         ) : (
           <div className="flex flex-col">
             {rules.map((rule) => (
-              <div key={rule.id} className="flex items-center gap-2">
-                <Badge tone={rule.action === 'FORCE_MASK' ? 'protective' : 'inactive'}>
-                  {actionLabel(rule.action)}
-                </Badge>
-                {rule.routingAction && rule.routingAction !== 'NONE' ? (
-                  <Badge tone="measuring">{routingActionLabel(rule.routingAction)}</Badge>
-                ) : null}
-                <div className="flex-1">
-                  <TermRuleRow
-                    rule={rule}
-                    caps={caps}
-                    canManage={canManage}
-                    busy={busy}
-                    onToggle={(id, enabled) => toggle.mutate({ id, enabled })}
-                    onDelete={(id) => remove.mutate(id)}
-                  />
-                </div>
-              </div>
+              <TermRuleRow
+                key={rule.id}
+                rule={rule}
+                caps={caps}
+                canManage={canManage}
+                busy={busy}
+                onToggle={(id, enabled) => toggle.mutate({ id, enabled })}
+                onDelete={(id) => remove.mutate(id)}
+              />
             ))}
           </div>
         )}

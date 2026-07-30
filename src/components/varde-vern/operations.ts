@@ -148,6 +148,49 @@ export function languageLabel(language?: string): string {
   return (language && LANGUAGE_LABELS[language]) ?? language ?? '—';
 }
 
+/** The plain-language "Effective outcome" of a term rule — the two independent axes a rule combines
+ *  (ADR 0028 masking + ADR 0029 EU routing) spelled out so an administrator sees the real consequence
+ *  without having to reason about the chips. `routing` is null when the rule has no EU-routing axis. */
+export interface TermRuleOutcome {
+  masking: string;
+  routing: string | null;
+}
+
+const MASKING_OUTCOME: Record<t.TermRuleAction, string> = {
+  FORCE_MASK: 'The term is masked before the request reaches the language model.',
+  DO_NOT_MASK:
+    'The term is not masked as a name, place or organisation — but if it also matches a built-in pattern (email, phone number, ID number, card, IP …) it is still masked.',
+};
+
+const ROUTING_OUTCOME: Record<t.TermRuleRoutingAction, string | null> = {
+  NONE: null,
+  RECOMMEND_EU:
+    'The reply still uses the normal model; afterwards the user is offered European (EU) processing, which then applies from the next message.',
+  REQUIRE_EU:
+    'This and every following message are handled by a European (EU) model and the conversation is locked; if no European model is available the message is refused.',
+};
+
+/**
+ * Derive the effective outcome of a global term rule from its masking action + EU-routing axis. Pure and
+ * language-independent (the rule's language scope is shown separately). Mirrors the verified proxy behaviour:
+ * DO_NOT_MASK never masks; RECOMMEND_EU is advisory (the current message is NOT rerouted, a suggestion is
+ * surfaced after the reply); REQUIRE_EU reroutes this and every later message to a European model and locks.
+ */
+export function describeTermRuleOutcome(input: {
+  action: t.TermRuleAction;
+  routingAction?: t.TermRuleRoutingAction;
+}): TermRuleOutcome {
+  return {
+    masking: MASKING_OUTCOME[input.action],
+    routing: ROUTING_OUTCOME[input.routingAction ?? 'NONE'],
+  };
+}
+
+/** Join a `TermRuleOutcome` into one sentence (masking, then the EU-routing clause when present). */
+export function termRuleOutcomeText(outcome: TermRuleOutcome): string {
+  return outcome.routing ? `${outcome.masking} ${outcome.routing}` : outcome.masking;
+}
+
 /** Human-readable "why this language" for the test studio (ADR 0026): Franc detection, the UI-language
  *  hint, an explicit pin, or a fallback. Tone follows the same protective/measuring/inactive scale. */
 export function describeLanguageSource(source?: t.PresidioLanguageSource): {

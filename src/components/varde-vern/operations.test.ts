@@ -11,6 +11,8 @@ import {
   formatPresidioScore,
   languageLabel,
   describeLanguageSource,
+  describeTermRuleOutcome,
+  termRuleOutcomeText,
 } from './operations';
 
 const entity = (over: Partial<t.VardeVernEntity>): t.VardeVernEntity => ({
@@ -162,5 +164,67 @@ describe('language detection helpers (ADR 0026)', () => {
     expect(describeLanguageSource('explicit').label).toMatch(/Pinned/i);
     expect(describeLanguageSource('error_fallback').tone).toBe('inactive');
     expect(describeLanguageSource(undefined).label).toBe('Unknown');
+  });
+});
+
+describe('describeTermRuleOutcome (ADR 0028 masking × ADR 0029 EU routing)', () => {
+  it('DO_NOT_MASK allows the term but does not over-claim (built-in patterns still mask); FORCE_MASK masks before egress', () => {
+    const doNot = describeTermRuleOutcome({ action: 'DO_NOT_MASK' }).masking;
+    expect(doNot).toMatch(/not masked as a name/i);
+    expect(doNot).toMatch(/still masked/i);
+    expect(describeTermRuleOutcome({ action: 'FORCE_MASK' }).masking).toMatch(
+      /masked before the request reaches/i,
+    );
+  });
+
+  it('no routing axis (missing or NONE) yields a null routing clause', () => {
+    expect(describeTermRuleOutcome({ action: 'FORCE_MASK' }).routing).toBeNull();
+    expect(
+      describeTermRuleOutcome({ action: 'FORCE_MASK', routingAction: 'NONE' }).routing,
+    ).toBeNull();
+  });
+
+  it('RECOMMEND_EU is advisory: current message not rerouted, applies from the next message', () => {
+    const routing = describeTermRuleOutcome({
+      action: 'DO_NOT_MASK',
+      routingAction: 'RECOMMEND_EU',
+    }).routing;
+    expect(routing).toMatch(/still uses the normal model/i);
+    expect(routing).toMatch(/from the next message/i);
+  });
+
+  it('REQUIRE_EU reroutes this + every later message to a European model and locks (refused if none)', () => {
+    const routing = describeTermRuleOutcome({
+      action: 'FORCE_MASK',
+      routingAction: 'REQUIRE_EU',
+    }).routing;
+    expect(routing).toMatch(/European \(EU\) model/i);
+    expect(routing).toMatch(/locked/i);
+    expect(routing).toMatch(/refused/i);
+  });
+
+  it('covers all six masking × routing combinations with a distinct masking + routing clause', () => {
+    const actions = ['FORCE_MASK', 'DO_NOT_MASK'] as const;
+    const routings = ['NONE', 'RECOMMEND_EU', 'REQUIRE_EU'] as const;
+    for (const action of actions) {
+      for (const routingAction of routings) {
+        const outcome = describeTermRuleOutcome({ action, routingAction });
+        expect(outcome.masking.length).toBeGreaterThan(0);
+        if (routingAction === 'NONE') expect(outcome.routing).toBeNull();
+        else expect(outcome.routing && outcome.routing.length).toBeGreaterThan(0);
+      }
+    }
+  });
+});
+
+describe('termRuleOutcomeText', () => {
+  it('returns the masking clause alone when there is no routing clause', () => {
+    const outcome = describeTermRuleOutcome({ action: 'FORCE_MASK' });
+    expect(termRuleOutcomeText(outcome)).toBe(outcome.masking);
+  });
+
+  it('joins masking + routing into one sentence when routing is present', () => {
+    const outcome = describeTermRuleOutcome({ action: 'DO_NOT_MASK', routingAction: 'REQUIRE_EU' });
+    expect(termRuleOutcomeText(outcome)).toBe(`${outcome.masking} ${outcome.routing}`);
   });
 });

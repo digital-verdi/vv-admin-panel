@@ -19,7 +19,7 @@ function Change({ label, before, after }: { label: string; before: string; after
 
 /**
  * Shows the LibreChat base-config impact of the pending routing change (models.default / titleModel / each
- * Varde model spec), computed purely from the current base config. Warnings (endpoint missing/ambiguous,
+ * Varde model spec), computed purely from the current base config. Warnings (no proxy endpoint,
  * unresolved specs) are advisory — routing still saves to the proxy first regardless.
  */
 export function SyncImpactPreview({ chatRouting }: SyncImpactPreviewProps) {
@@ -39,9 +39,8 @@ export function SyncImpactPreview({ chatRouting }: SyncImpactPreviewProps) {
     return (
       <div role="note" className={box}>
         <p className="text-(--cui-color-feedback-warning-fg)">
-          {plan.error === 'missing'
-            ? "No Varde (vv-llm-proxy) endpoint found in the LibreChat config — routing will save to the proxy, but LibreChat won't be synced automatically."
-            : 'Multiple “Varde” endpoints found — resolve the duplicate in the Configuration editor before the sync can run.'}
+          No Varde (vv-llm-proxy) endpoint found in the LibreChat config — routing will save to the proxy,
+          but LibreChat won&apos;t be synced automatically.
         </p>
       </div>
     );

@@ -224,4 +224,85 @@ describe('TermRulesPanel', () => {
     await screen.findByText('Add a global term rule');
     expect(screen.getByText('Add rule').closest('button')).toBeDisabled();
   });
+
+  it('shows a live Effective outcome preview that tracks the selected masking action', async () => {
+    renderPanel();
+    await screen.findByText('Add a global term rule');
+    // Default action is Always mask (FORCE_MASK).
+    expect(screen.getByLabelText('Effective outcome preview')).toHaveTextContent(
+      /masked before the request reaches/i,
+    );
+    const [ruleSelect] = document.querySelectorAll('select');
+    fireEvent.change(ruleSelect, { target: { value: 'DO_NOT_MASK' } });
+    expect(screen.getByLabelText('Effective outcome preview')).toHaveTextContent(
+      /not masked as a name/i,
+    );
+  });
+
+  it('the preview gains the EU-routing clause when routing is advertised and selected', async () => {
+    termRulesFn.mockResolvedValue({ rules: [] });
+    capsFn.mockResolvedValue({
+      ...CAPS,
+      termRuleRoutingActions: ['NONE', 'RECOMMEND_EU', 'REQUIRE_EU'],
+    });
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={qc}>
+        <TermRulesPanel canManage={true} />
+      </QueryClientProvider>,
+    );
+    await screen.findByText('Add a global term rule');
+    // NONE selected by default → no routing clause yet.
+    expect(screen.getByLabelText('Effective outcome preview')).not.toHaveTextContent(
+      /European \(EU\) model/i,
+    );
+    const routingSelect = document.querySelectorAll('select')[2] as HTMLSelectElement;
+    fireEvent.change(routingSelect, { target: { value: 'REQUIRE_EU' } });
+    expect(screen.getByLabelText('Effective outcome preview')).toHaveTextContent(
+      /European \(EU\) model/i,
+    );
+    expect(screen.getByLabelText('Effective outcome preview')).toHaveTextContent(/locked/i);
+    // RECOMMEND_EU renders the advisory clause instead.
+    fireEvent.change(routingSelect, { target: { value: 'RECOMMEND_EU' } });
+    expect(screen.getByLabelText('Effective outcome preview')).toHaveTextContent(
+      /from the next message/i,
+    );
+  });
+
+  it('each rule row spells out its effective outcome (masking + EU routing)', async () => {
+    const rule: t.VardeVernTermRule = {
+      id: 'r1',
+      action: 'DO_NOT_MASK',
+      routingAction: 'RECOMMEND_EU',
+      languageScope: 'LANGUAGE',
+      languageCode: 'nb',
+      term: 'konfidensielt',
+      enabled: true,
+      createdBy: null,
+      createdAt: '2026-07-30T00:00:00.000Z',
+    };
+    renderPanel([rule]);
+    await screen.findByText('konfidensielt');
+    expect(screen.getByText(/not masked as a name/i)).toBeInTheDocument();
+    expect(screen.getByText(/from the next message/i)).toBeInTheDocument();
+  });
+
+  it('a disabled rule reads as having no effect', async () => {
+    const rule: t.VardeVernTermRule = {
+      id: 'r2',
+      action: 'FORCE_MASK',
+      routingAction: 'REQUIRE_EU',
+      languageScope: 'ALL',
+      languageCode: null,
+      term: 'Prosjekt X',
+      enabled: false,
+      createdBy: null,
+      createdAt: '2026-07-30T00:00:00.000Z',
+    };
+    renderPanel([rule]);
+    await screen.findByText('Prosjekt X');
+    expect(screen.getByText(/no effect while turned off/i)).toBeInTheDocument();
+  });
 });

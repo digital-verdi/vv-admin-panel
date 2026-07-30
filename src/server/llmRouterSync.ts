@@ -48,14 +48,17 @@ function readModelsDefault(endpoint: ConfigObject): string[] {
 }
 
 /**
- * Locate the Varde custom endpoint in the base config by its proxy `baseURL` (see
+ * Locate the PRIMARY Varde custom endpoint in the base config by its proxy `baseURL` (see
  * `endpointTargetsProxy`), independent of the endpoint's display name. `endpoints.custom` may be a real
- * array or an index-keyed object, so it is normalized first. Zero matches → `missing`; more than one →
- * `ambiguous` (never guess — an admin must resolve it in the Configuration editor).
+ * array or an index-keyed object, so it is normalized first. Zero matches → `missing`. When MULTIPLE
+ * endpoints target the proxy (the general "Varde Secure" exposing the routing groups alongside a dedicated
+ * single-group endpoint such as "Varde Secure EU"), the primary is the widest-coverage endpoint (the most
+ * `models.default` entries; tiebreak = lowest index). `proxyCount` lets the sync preserve the primary's own
+ * subset when there is more than one endpoint, instead of forcing every group onto it.
  */
 export function findVardeEndpoint(
   baseConfig: ConfigObject,
-): { index: number; endpoint: ConfigObject } | { error: t.VardeSyncError } {
+): { index: number; endpoint: ConfigObject; proxyCount: number } | { error: t.VardeSyncError } {
   const endpoints = asObject(baseConfig.endpoints);
   const custom = toConfigArraySource(endpoints?.custom) ?? [];
   const matches: Array<{ index: number; endpoint: ConfigObject }> = [];
@@ -64,8 +67,10 @@ export function findVardeEndpoint(
     if (endpoint && endpointTargetsProxy(endpoint)) matches.push({ index: i, endpoint });
   }
   if (matches.length === 0) return { error: 'missing' };
-  if (matches.length > 1) return { error: 'ambiguous' };
-  return matches[0]!;
+  const primary = matches.reduce((best, m) =>
+    readModelsDefault(m.endpoint).length > readModelsDefault(best.endpoint).length ? m : best,
+  );
+  return { index: primary.index, endpoint: primary.endpoint, proxyCount: matches.length };
 }
 
 /** The Varde-relevant fragments used for best-effort optimistic-lock (drift) detection. */
@@ -112,7 +117,7 @@ export function computeVardeSyncPlan(
 ): t.VardeSyncPlan | { error: t.VardeSyncError } {
   const found = findVardeEndpoint(baseConfig);
   if ('error' in found) return found;
-  const { index: endpointIndex, endpoint } = found;
+  const { index: endpointIndex, endpoint, proxyCount } = found;
   const vardeName = typeof endpoint.name === 'string' ? endpoint.name : null;
 
   const byName = new Map<string, t.ChatModelGroup>();
@@ -122,7 +127,17 @@ export function computeVardeSyncPlan(
   const defaultGroup = groups.find((group) => group.id === defaultGroupId) ?? groups[0];
 
   const beforeModelsDefault = readModelsDefault(endpoint);
-  const afterModelsDefault = groups.map((group) => group.name);
+  // A single proxy endpoint owns ALL groups (a newly added group auto-appears in its picker). With MULTIPLE
+  // proxy endpoints (a dedicated single-group endpoint such as "Varde Secure EU" alongside the general one),
+  // do NOT force every group onto the primary — preserve its own subset: remap renamed groups (byName also
+  // maps legacyNames) and drop groups that no longer exist. A brand-new group is assigned to an endpoint by
+  // the admin manually, so it never leaks into a dedicated endpoint's list.
+  const afterModelsDefault =
+    proxyCount > 1
+      ? beforeModelsDefault
+          .map((name) => byName.get(name)?.name)
+          .filter((name): name is string => name != null)
+      : groups.map((group) => group.name);
   const beforeTitleModel =
     typeof endpoint.titleModel === 'string' ? endpoint.titleModel : undefined;
   const afterTitleModel = defaultGroup?.name ?? beforeTitleModel ?? '';
@@ -210,7 +225,7 @@ export const syncLibreChatForVardeFn = createServerFn({ method: 'POST' })
     }
     const plan = computeVardeSyncPlan(baseConfig, data.groups, data.defaultGroupId);
     if ('error' in plan) {
-      return { status: plan.error === 'missing' ? 'endpoint-missing' : 'endpoint-ambiguous' };
+      return { status: 'endpoint-missing' };
     }
     if (plan.entries.length === 0) return { status: 'noop', unresolvedSpecs: plan.unresolvedSpecs };
     await saveBaseConfigFn({ data: { entries: plan.entries } });

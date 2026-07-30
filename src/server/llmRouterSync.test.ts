@@ -63,16 +63,28 @@ describe('findVardeEndpoint', () => {
     expect(found).toEqual({ error: 'missing' });
   });
 
-  it('reports ambiguous when more than one endpoint points at the proxy', () => {
+  it('picks the widest-coverage endpoint as primary when multiple point at the proxy', () => {
     const found = findVardeEndpoint(
       baseConfig({
         custom: [
-          { name: 'Varde', baseURL: '${VV_LLM_PROXY_BASE_URL}/v1' },
-          { name: 'Varde Secure', baseURL: '${VV_LLM_PROXY_BASE_URL}/v1' },
+          {
+            name: 'Varde Secure EU',
+            baseURL: '${VV_LLM_PROXY_BASE_URL}/v1',
+            models: { default: ['eu-secure'] },
+          },
+          {
+            name: 'Varde Secure',
+            baseURL: '${VV_LLM_PROXY_BASE_URL}/v1',
+            models: { default: ['frontier', 'standard'] },
+          },
         ],
       }),
     );
-    expect(found).toEqual({ error: 'ambiguous' });
+    expect('error' in found).toBe(false);
+    if (!('error' in found)) {
+      expect((found.endpoint as { name?: string }).name).toBe('Varde Secure');
+      expect(found.proxyCount).toBe(2);
+    }
   });
 
   it('handles an index-keyed object shape for endpoints.custom', () => {
@@ -107,6 +119,44 @@ describe('computeVardeSyncPlan', () => {
     if ('error' in plan) return;
     expect(plan.entries).toEqual([]);
     expect(plan.unresolvedSpecs).toEqual([]);
+  });
+
+  it('with MULTIPLE proxy endpoints, preserves the primary subset (a dedicated eu-secure endpoint is not forced onto it)', () => {
+    const config = baseConfig({
+      custom: [
+        {
+          name: 'Varde Secure EU',
+          baseURL: '${VV_LLM_PROXY_BASE_URL}/v1',
+          models: { default: ['eu-secure'] },
+          titleModel: 'eu-secure',
+        },
+        {
+          name: 'Varde Secure',
+          baseURL: '${VV_LLM_PROXY_BASE_URL}/v1',
+          models: { default: ['frontier', 'standard'] },
+          titleModel: 'standard',
+        },
+      ],
+      specs: [
+        {
+          name: 'std',
+          label: 'std',
+          default: true,
+          preset: { endpoint: 'Varde Secure', model: 'standard' },
+        },
+      ],
+    });
+    const gs: t.ChatModelGroup[] = [
+      { id: 'frontier', name: 'frontier', models: ['f1'], legacyNames: [] },
+      { id: 'standard', name: 'standard', models: ['s1'], legacyNames: [] },
+      { id: 'eu-secure', name: 'eu-secure', models: ['m1'], legacyNames: [] },
+    ];
+    const plan = computeVardeSyncPlan(config, gs, 'standard');
+    if ('error' in plan) throw new Error('unexpected error');
+    // Primary = "Varde Secure" (widest coverage); its models.default stays [frontier, standard] — the
+    // eu-secure group is NOT forced in — and there is nothing to write (no rename).
+    expect(plan.diff.modelsDefault.after).toEqual(['frontier', 'standard']);
+    expect(plan.entries).toEqual([]);
   });
 
   it('rewrites models.default, titleModel and the spec via legacy names on a rename', () => {

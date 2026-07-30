@@ -116,7 +116,8 @@ export interface VardeSyncPlan {
   unresolvedSpecs: Array<{ index: number; name: string; model: string }>;
 }
 
-export type VardeSyncError = 'missing' | 'ambiguous';
+/** Only `missing` (no proxy-routed endpoint) is a sync error now; multiple endpoints resolve to a primary. */
+export type VardeSyncError = 'missing';
 
 /** The Varde-relevant LibreChat fragments used for best-effort optimistic-lock (drift) detection. */
 export interface VardeFragments {
@@ -129,7 +130,7 @@ export interface VardeFragments {
 export type SyncLibreChatResult =
   | { status: 'ok' | 'noop'; unresolvedSpecs: VardeSyncPlan['unresolvedSpecs'] }
   | { status: 'drift' }
-  | { status: 'endpoint-missing' | 'endpoint-ambiguous' };
+  | { status: 'endpoint-missing' };
 
 export interface LlmProxyModel {
   id: string;

@@ -48,6 +48,7 @@ const baseStatus: t.DemoStatus = {
   ],
   selfServe: { enabled: true, startsUsed: 4 },
   configDrift: null,
+  pollResults: { responses: 8, venn: 6, rute: 2, vern: 5 },
 };
 
 let statusValue: t.DemoStatus = baseStatus;
@@ -286,6 +287,37 @@ describe('DemoPage', () => {
       expect(ids).toEqual(expect.arrayContaining(['l1', 'l2']));
       expect(ids).not.toContain('ss');
     });
+  });
+
+  it('renders the product-interest poll results with each product share', async () => {
+    renderPage();
+    const poll = await screen.findByRole('region', { name: 'Poll results' });
+    // 8 responses; Venn 6/8 = 75 %, Rute 2/8 = 25 %, Vern 5/8 = 63 % (rounded).
+    expect(within(within(poll).getByText('Responses').parentElement as HTMLElement).getByText('8')).toBeInTheDocument();
+    const venn = within(poll).getByText('Varde Venn').parentElement as HTMLElement;
+    expect(within(venn).getByText('6')).toBeInTheDocument();
+    expect(within(venn).getByText('75% of responses')).toBeInTheDocument();
+    const rute = within(poll).getByText('Varde Rute').parentElement as HTMLElement;
+    expect(within(rute).getByText('25% of responses')).toBeInTheDocument();
+    const vern = within(poll).getByText('Varde Vern').parentElement as HTMLElement;
+    expect(within(vern).getByText('63% of responses')).toBeInTheDocument();
+  });
+
+  it('shows an empty state when nobody has answered the poll yet', async () => {
+    statusValue = { ...baseStatus, pollResults: { responses: 0, venn: 0, rute: 0, vern: 0 } };
+    renderPage();
+    const poll = await screen.findByRole('region', { name: 'Poll results' });
+    expect(within(poll).getByText('No poll responses yet.')).toBeInTheDocument();
+  });
+
+  it('survives a backend that predates the poll (pollResults absent)', async () => {
+    const { pollResults: _omitted, ...withoutPoll } = baseStatus;
+    statusValue = withoutPoll as t.DemoStatus;
+    renderPage();
+    const poll = await screen.findByRole('region', { name: 'Poll results' });
+    expect(within(poll).getByText('No poll responses yet.')).toBeInTheDocument();
+    // …and the rest of the tab still renders.
+    expect(screen.getByRole('region', { name: 'Demo Mode' })).toBeInTheDocument();
   });
 
   it('disables bulk-select when the admin lacks the capability', async () => {

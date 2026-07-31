@@ -67,6 +67,18 @@ export type DemoConfigDrift =
   | string[]
   | { ok?: false; error?: string; reasons?: string[]; issues?: string[] };
 
+/**
+ * Aggregated answers to the anonymous product-interest poll shown to visitors who could not (further)
+ * demo. `responses` is the number of devices that answered (one vote per device); the three product
+ * counts are subsets of it and overlap freely, since a visitor may tick several.
+ */
+export interface DemoPollResults {
+  responses: number;
+  venn: number;
+  rute: number;
+  vern: number;
+}
+
 export interface DemoStatus {
   capacity: DemoCapacity;
   profiles: DemoProfileCounts;
@@ -74,6 +86,8 @@ export interface DemoStatus {
   sessions: DemoSession[];
   selfServe: DemoSelfServe;
   configDrift: DemoConfigDrift;
+  /** Optional so the panel keeps working against a backend that predates the poll. */
+  pollResults?: DemoPollResults;
 }
 
 /** Discriminated result of a capacity raise: the backend 409/422 become non-throwing UI states. */

@@ -29,6 +29,32 @@ export interface DemoLink {
   startsUsed: number;
   status: DemoLinkStatus;
   expiresAt: string | null;
+  isSelfServe: boolean;
+}
+
+/** Raw per-session profile status (does NOT collapse `activating` into `pending` like DemoProfileCounts). */
+export type DemoProfileStatus =
+  | 'pending'
+  | 'activating'
+  | 'active'
+  | 'closed'
+  | 'expired'
+  | 'failed';
+
+/** A live demo user/session for the admin list — sanitized (no email / userId / device). */
+export interface DemoSession {
+  id: string;
+  displayUsername: string;
+  status: DemoProfileStatus;
+  startedAt: string | null;
+  lastSeenAt: string | null;
+  expiresAt: string | null;
+}
+
+/** State of the tokenless /demo self-serve entry (the default link). */
+export interface DemoSelfServe {
+  enabled: boolean;
+  startsUsed: number;
 }
 
 /**
@@ -45,6 +71,8 @@ export interface DemoStatus {
   capacity: DemoCapacity;
   profiles: DemoProfileCounts;
   links: DemoLink[];
+  sessions: DemoSession[];
+  selfServe: DemoSelfServe;
   configDrift: DemoConfigDrift;
 }
 

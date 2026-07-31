@@ -15,6 +15,7 @@ const baseStatus: t.DemoStatus = {
       startsUsed: 6,
       status: 'active',
       expiresAt: '2026-08-05T00:00:00.000Z',
+      isSelfServe: false,
     },
     {
       id: 'l2',
@@ -23,8 +24,29 @@ const baseStatus: t.DemoStatus = {
       startsUsed: 0,
       status: 'revoked',
       expiresAt: null,
+      isSelfServe: false,
+    },
+    {
+      id: 'ss',
+      description: 'Self-serve demo (default)',
+      maxStarts: null,
+      startsUsed: 4,
+      status: 'active',
+      expiresAt: null,
+      isSelfServe: true,
     },
   ],
+  sessions: [
+    {
+      id: 's1',
+      displayUsername: 'Glad Rev 42',
+      status: 'active',
+      startedAt: '2026-08-01T10:00:00.000Z',
+      lastSeenAt: '2026-08-01T10:05:00.000Z',
+      expiresAt: '2026-08-02T10:00:00.000Z',
+    },
+  ],
+  selfServe: { enabled: true, startsUsed: 4 },
   configDrift: null,
 };
 
@@ -33,6 +55,7 @@ let canManage = true;
 const revokeFn = vi.fn().mockResolvedValue(undefined);
 const setCapacityFn = vi.fn().mockResolvedValue({ status: 'ok', capacity: baseStatus.capacity });
 const createLinkFn = vi.fn().mockResolvedValue({ token: 'tok', link: baseStatus.links[0] });
+const setSelfServeFn = vi.fn().mockResolvedValue({ enabled: false, startsUsed: 4 });
 
 vi.mock('@/server', () => ({
   demoStatusQueryOptions: {
@@ -42,6 +65,7 @@ vi.mock('@/server', () => ({
   revokeDemoLinkFn: (a: unknown) => revokeFn(a),
   setDemoCapacityFn: (a: unknown) => setCapacityFn(a),
   createDemoLinkFn: (a: unknown) => createLinkFn(a),
+  setSelfServeFn: (a: unknown) => setSelfServeFn(a),
 }));
 vi.mock('@/hooks', () => ({ useCapabilities: () => ({ hasCapability: () => canManage }) }));
 vi.mock('@/utils', async (importOriginal) => {
@@ -78,6 +102,7 @@ describe('DemoPage', () => {
     revokeFn.mockClear();
     setCapacityFn.mockClear();
     createLinkFn.mockClear();
+    setSelfServeFn.mockClear();
   });
 
   it('renders capacity, session, and link stats from the status query', async () => {
@@ -135,5 +160,41 @@ describe('DemoPage', () => {
     renderPage();
     await screen.findByRole('region', { name: 'Demo Mode' });
     expect(screen.getByText('No demo links yet.')).toBeInTheDocument();
+  });
+
+  it('lists live demo sessions from status.sessions', async () => {
+    renderPage();
+    const sessions = await screen.findByRole('region', { name: 'Demo Mode' });
+    const sessionsSection = within(sessions).getByRole('region', { name: 'Demo sessions' });
+    expect(within(sessionsSection).getByText('Glad Rev 42')).toBeInTheDocument();
+  });
+
+  it('shows an empty state when there are no demo sessions', async () => {
+    statusValue = { ...baseStatus, sessions: [] };
+    renderPage();
+    await screen.findByRole('region', { name: 'Demo Mode' });
+    expect(screen.getByText('No active demo sessions.')).toBeInTheDocument();
+  });
+
+  it('toggles self-serve off via setSelfServeFn (enabled → mutate(false))', async () => {
+    renderPage();
+    await screen.findByRole('region', { name: 'Demo Mode' });
+    fireEvent.click(screen.getByRole('button', { name: 'Turn off' }));
+    await waitFor(() => expect(setSelfServeFn).toHaveBeenCalledWith({ data: { enabled: false } }));
+  });
+
+  it('labels the default self-serve link and hides its generic revoke', async () => {
+    renderPage();
+    const region = await screen.findByRole('region', { name: 'Demo Mode' });
+    const ssRow = within(region).getByText('Self-serve (default)').closest('tr') as HTMLElement;
+    expect(within(ssRow).queryByRole('button', { name: 'Revoke' })).toBeNull();
+    expect(within(ssRow).getByText('Managed above')).toBeInTheDocument();
+  });
+
+  it('disables the self-serve toggle without the capability', async () => {
+    canManage = false;
+    renderPage();
+    await screen.findByRole('region', { name: 'Demo Mode' });
+    expect(screen.getByRole('button', { name: 'Turn off' })).toBeDisabled();
   });
 });

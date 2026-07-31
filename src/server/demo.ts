@@ -28,7 +28,25 @@ export const demoStatusQueryOptions = queryOptions({
   queryKey: ['demo-status'],
   queryFn: () => getDemoStatusFn(),
   staleTime: 15_000,
+  // Live-refresh so new demo sessions + capacity/link usage appear without a manual reload; paused when the
+  // tab is hidden.
+  refetchInterval: 15_000,
+  refetchIntervalInBackground: false,
 });
+
+export const setSelfServeFn = createServerFn({ method: 'POST' })
+  .inputValidator(z.object({ enabled: z.boolean() }))
+  .handler(async ({ data }): Promise<t.DemoSelfServe> => {
+    const response = await apiFetch('/api/admin/demo/self-serve', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      await extractApiError(response, 'Failed to update self-serve setting');
+    }
+    const body = (await response.json()) as { enabled: boolean };
+    return { enabled: Boolean(body.enabled), startsUsed: 0 };
+  });
 
 export const setDemoCapacityFn = createServerFn({ method: 'POST' })
   .inputValidator(

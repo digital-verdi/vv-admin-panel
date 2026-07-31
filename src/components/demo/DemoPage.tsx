@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type * as t from '@/types';
-import { demoStatusQueryOptions, revokeDemoLinkFn } from '@/server';
+import { demoStatusQueryOptions, revokeDemoLinkFn, setSelfServeFn } from '@/server';
 import { EmptyState, LoadingState } from '@/components/shared';
 import { notifySuccess, notifyError } from '@/utils';
 import { useCapabilities } from '@/hooks';
@@ -14,6 +14,23 @@ const LINK_STATUS_LABEL: Record<t.DemoLinkStatus, string> = {
   revoked: 'Revoked',
   expired: 'Expired',
 };
+
+const SESSION_STATUS_LABEL: Record<t.DemoProfileStatus, string> = {
+  pending: 'Pending',
+  activating: 'Activating',
+  active: 'Active',
+  closed: 'Closed',
+  expired: 'Expired',
+  failed: 'Failed',
+};
+
+function formatTime(value: string | null): string {
+  return value ? new Date(value).toLocaleString() : '—';
+}
+
+function linkLabel(link: t.DemoLink): string {
+  return link.isSelfServe ? 'Self-serve (default)' : link.description || '';
+}
 
 function Stat({ label, value }: { label: string; value: number | string }) {
   return (
@@ -52,11 +69,20 @@ export function DemoPage() {
     onError: (err: Error) => notifyError(err.message),
   });
 
+  const selfServeMutation = useMutation({
+    mutationFn: (enabled: boolean) => setSelfServeFn({ data: { enabled } }),
+    onSuccess: (result: t.DemoSelfServe) => {
+      queryClient.invalidateQueries({ queryKey: ['demo-status'] });
+      notifySuccess(result.enabled ? 'Self-serve demo turned on' : 'Self-serve demo turned off');
+    },
+    onError: (err: Error) => notifyError(err.message),
+  });
+
   if (isLoading || !status) {
     return <LoadingState />;
   }
 
-  const { capacity, profiles, links } = status;
+  const { capacity, profiles, links, sessions, selfServe } = status;
   const driftDetected = hasConfigDrift(status.configDrift);
 
   return (
@@ -89,8 +115,44 @@ export function DemoPage() {
         </div>
       </section>
 
+      <section aria-label="Self-serve access">
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-(--cui-color-stroke-default) px-4 py-3">
+          <div className="flex items-center gap-2.5">
+            <span
+              aria-hidden="true"
+              className="inline-block h-2 w-2 shrink-0 rounded-full"
+              style={{
+                backgroundColor: selfServe.enabled
+                  ? 'var(--cui-color-text-success)'
+                  : 'var(--cui-color-text-muted)',
+              }}
+            />
+            <div className="flex flex-col">
+              <span className="text-sm font-medium text-(--cui-color-text-default)">
+                Self-serve access — {selfServe.enabled ? 'On' : 'Off'}
+              </span>
+              <span className="text-xs text-(--cui-color-text-muted)">
+                The tokenless <span className="font-mono">/demo</span> entry.{' '}
+                {selfServe.enabled
+                  ? `${selfServe.startsUsed} started via /demo.`
+                  : 'Turn on to let anyone start a demo from /demo.'}
+              </span>
+            </div>
+          </div>
+          <button
+            type="button"
+            disabled={!canManage || selfServeMutation.isPending}
+            onClick={() => selfServeMutation.mutate(!selfServe.enabled)}
+            aria-disabled={!canManage || undefined}
+            className="shrink-0 rounded-lg border border-(--cui-color-stroke-default) bg-transparent px-3 py-1.5 text-sm text-(--cui-color-text-default) transition-colors hover:bg-(--cui-color-background-hover) disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {selfServe.enabled ? 'Turn off' : 'Turn on'}
+          </button>
+        </div>
+      </section>
+
       <section aria-label="Demo profiles">
-        <h3 className="mb-3 text-sm font-medium text-(--cui-color-text-default)">Sessions</h3>
+        <h3 className="mb-3 text-sm font-medium text-(--cui-color-text-default)">Session counts</h3>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           <Stat label="Active" value={profiles.active} />
           <Stat label="Pending" value={profiles.pending} />
@@ -124,6 +186,66 @@ export function DemoPage() {
               ? 'Config drift detected — the DEMO role config differs from the intended vardeDemo config. It reconciles on the next deploy or reconcile run.'
               : 'Config OK — the effective DEMO-role config matches the intended vardeDemo config.'}
           </span>
+        </div>
+      </section>
+
+      <section aria-label="Demo sessions">
+        <h3 className="mb-3 text-sm font-medium text-(--cui-color-text-default)">Demo sessions</h3>
+        <div className="overflow-x-auto rounded-lg border border-(--cui-color-stroke-default)">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="border-b border-(--cui-color-stroke-default) bg-(--cui-color-background-muted)">
+                <th scope="col" className="px-4 py-2.5 font-medium text-(--cui-color-text-muted)">
+                  User
+                </th>
+                <th scope="col" className="px-4 py-2.5 font-medium text-(--cui-color-text-muted)">
+                  Status
+                </th>
+                <th scope="col" className="px-4 py-2.5 font-medium text-(--cui-color-text-muted)">
+                  Started
+                </th>
+                <th scope="col" className="px-4 py-2.5 font-medium text-(--cui-color-text-muted)">
+                  Last seen
+                </th>
+                <th scope="col" className="px-4 py-2.5 font-medium text-(--cui-color-text-muted)">
+                  Expires
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {sessions.map((session) => (
+                <tr
+                  key={session.id}
+                  className="border-b border-(--cui-color-stroke-default) last:border-0"
+                >
+                  <td className="px-4 py-3 text-(--cui-color-text-default)">
+                    {session.displayUsername || (
+                      <span className="text-(--cui-color-text-muted)">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-(--cui-color-text-muted)">
+                    {SESSION_STATUS_LABEL[session.status]}
+                  </td>
+                  <td className="px-4 py-3 text-(--cui-color-text-muted)">
+                    {formatTime(session.startedAt)}
+                  </td>
+                  <td className="px-4 py-3 text-(--cui-color-text-muted)">
+                    {formatTime(session.lastSeenAt)}
+                  </td>
+                  <td className="px-4 py-3 text-(--cui-color-text-muted)">
+                    {formatTime(session.expiresAt)}
+                  </td>
+                </tr>
+              ))}
+              {sessions.length === 0 && (
+                <tr>
+                  <td colSpan={5}>
+                    <EmptyState message="No active demo sessions." />
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </section>
 
@@ -169,7 +291,7 @@ export function DemoPage() {
                   className="border-b border-(--cui-color-stroke-default) last:border-0"
                 >
                   <td className="px-4 py-3 text-(--cui-color-text-default)">
-                    {link.description || <span className="text-(--cui-color-text-muted)">—</span>}
+                    {linkLabel(link) || <span className="text-(--cui-color-text-muted)">—</span>}
                   </td>
                   <td className="px-4 py-3 text-(--cui-color-text-muted)">
                     {LINK_STATUS_LABEL[link.status]}
@@ -183,14 +305,20 @@ export function DemoPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex justify-end">
-                      <button
-                        type="button"
-                        disabled={!canManage || link.status !== 'active' || revokeMutation.isPending}
-                        onClick={() => revokeMutation.mutate(link.id)}
-                        className="rounded-md px-2 py-1 text-xs text-(--cui-color-text-danger) transition-colors hover:bg-(--cui-color-background-hover) disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        Revoke
-                      </button>
+                      {link.isSelfServe ? (
+                        <span className="text-xs text-(--cui-color-text-muted)">Managed above</span>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={
+                            !canManage || link.status !== 'active' || revokeMutation.isPending
+                          }
+                          onClick={() => revokeMutation.mutate(link.id)}
+                          className="rounded-md px-2 py-1 text-xs text-(--cui-color-text-danger) transition-colors hover:bg-(--cui-color-background-hover) disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Revoke
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

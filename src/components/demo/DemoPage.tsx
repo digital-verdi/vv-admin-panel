@@ -54,14 +54,25 @@ function headerCheckState(selectableIds: string[], selected: Set<string>): boole
   return count === selectableIds.length ? true : 'indeterminate';
 }
 
-function Stat({ label, value }: { label: string; value: number | string }) {
+function Stat({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: number | string;
+  hint?: string;
+}) {
   return (
     <div className="flex flex-col gap-0.5 rounded-lg border border-(--cui-color-stroke-default) px-4 py-3">
       <span className="text-xs text-(--cui-color-text-muted)">{label}</span>
       <span className="text-lg font-semibold text-(--cui-color-text-default)">{value}</span>
+      {hint && <span className="text-xs text-(--cui-color-text-muted)">{hint}</span>}
     </div>
   );
 }
+
+const EMPTY_POLL: t.DemoPollResults = { responses: 0, venn: 0, rute: 0, vern: 0 };
 
 function BulkButton({
   label,
@@ -169,6 +180,10 @@ export function DemoPage() {
 
   const { capacity, profiles, links, sessions, selfServe } = status;
   const driftDetected = hasConfigDrift(status.configDrift);
+  // Optional on the contract so the panel still renders against a backend that predates the poll.
+  const poll = status.pollResults ?? EMPTY_POLL;
+  const pollShare = (count: number) =>
+    poll.responses > 0 ? `${Math.round((count / poll.responses) * 100)}% of responses` : undefined;
 
   // Self-serve default link is managed by its toggle, never bulk-selected/deleted.
   const selectableLinks = links.filter((link) => !link.isSelfServe);
@@ -292,6 +307,26 @@ export function DemoPage() {
           <Stat label="Failed" value={profiles.failed} />
           <Stat label="Cleanup errors" value={profiles.cleanupErrors} />
         </div>
+      </section>
+
+      <section aria-label="Poll results">
+        <h3 className="mb-1 text-sm font-medium text-(--cui-color-text-default)">
+          Product interest
+        </h3>
+        <p className="mb-3 text-sm text-(--cui-color-text-muted)">
+          Anonymous answers from visitors who could not (further) demo — one vote per device, and no
+          contact details are collected. A visitor may pick several products, so the counts overlap.
+        </p>
+        {poll.responses === 0 ? (
+          <EmptyState message="No poll responses yet." />
+        ) : (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Stat label="Responses" value={poll.responses} />
+            <Stat label="Varde Venn" value={poll.venn} hint={pollShare(poll.venn)} />
+            <Stat label="Varde Rute" value={poll.rute} hint={pollShare(poll.rute)} />
+            <Stat label="Varde Vern" value={poll.vern} hint={pollShare(poll.vern)} />
+          </div>
+        )}
       </section>
 
       <section aria-label="Demo configuration status">

@@ -91,6 +91,47 @@ export const createDemoLinkFn = createServerFn({ method: 'POST' })
     return (await response.json()) as t.CreateDemoLinkResult;
   });
 
+const idsInput = z.object({ ids: z.array(z.string()).min(1) });
+
+export const revokeDemoLinksFn = createServerFn({ method: 'POST' })
+  .inputValidator(idsInput)
+  .handler(async ({ data }): Promise<t.DemoBulkResult> => {
+    const response = await apiFetch('/api/admin/demo-links/bulk-revoke', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      await extractApiError(response, 'Failed to revoke demo links');
+    }
+    return (await response.json()) as t.DemoBulkResult;
+  });
+
+export const deleteDemoLinksFn = createServerFn({ method: 'POST' })
+  .inputValidator(idsInput)
+  .handler(async ({ data }): Promise<t.DemoBulkResult> => {
+    const response = await apiFetch('/api/admin/demo-links/bulk-delete', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      await extractApiError(response, 'Failed to delete demo links');
+    }
+    return (await response.json()) as t.DemoBulkResult;
+  });
+
+export const terminateDemoSessionsFn = createServerFn({ method: 'POST' })
+  .inputValidator(idsInput)
+  .handler(async ({ data }): Promise<t.DemoBulkResult> => {
+    const response = await apiFetch('/api/admin/demo/sessions/terminate', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      await extractApiError(response, 'Failed to terminate demo sessions');
+    }
+    return (await response.json()) as t.DemoBulkResult;
+  });
+
 export const revokeDemoLinkFn = createServerFn({ method: 'POST' })
   .inputValidator(z.object({ id: z.string() }))
   .handler(async ({ data }): Promise<void> => {

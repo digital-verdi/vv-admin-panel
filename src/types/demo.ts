@@ -87,6 +87,16 @@ export interface CreateDemoLinkResult {
   link: DemoLink;
 }
 
+/** Per-id outcome of a bulk terminate/delete/revoke action (ids sorted into the buckets that apply). */
+export interface DemoBulkResult {
+  terminated?: string[];
+  deleted?: string[];
+  revoked?: string[];
+  skipped?: string[];
+  skippedSelfServe?: string[];
+  notFound?: string[];
+}
+
 export interface RaiseCapacityDialogProps {
   open: boolean;
   onClose: () => void;

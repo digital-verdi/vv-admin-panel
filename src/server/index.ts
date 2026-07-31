@@ -1,6 +1,7 @@
 export * from './auth';
 export * from './capabilities';
 export * from './config';
+export * from './demo';
 export * from './groups';
 export * from './invites';
 export * from './llmProxy';

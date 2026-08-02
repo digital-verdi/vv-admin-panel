@@ -154,6 +154,29 @@ export interface VardeVernLanguageRouting {
   supportedLanguages: string[];
 }
 
+/** One engine class in the analysis-scope matrix. Authoritative engines read every field. */
+export interface VardeVernScopeEngine {
+  id: string;
+  label: string;
+  kind: 'authoritative' | 'supplementary';
+}
+
+/**
+ * One text-bearing request field. `supplementary: false` means the SEMANTIC engine skips it — the
+ * authoritative engines still read it, so structural PII is never exempt (ADR 0030).
+ */
+export interface VardeVernScopeField {
+  id: string;
+  label: string;
+  jsonPath: string;
+  supplementary: boolean;
+}
+
+export interface VardeVernAnalysisScope {
+  engines: VardeVernScopeEngine[];
+  fields: VardeVernScopeField[];
+}
+
 export interface VardeVern {
   policyVersion: number;
   defaultAction: VardeVernAction;
@@ -173,6 +196,11 @@ export interface VardeVern {
   presidio?: PresidioStatus;
   /** Read-only per-request language routing (ADR 0026). Undefined on older proxies. */
   languageRouting?: VardeVernLanguageRouting;
+  /**
+   * Which fields each engine reads (ADR 0030). Optional: undefined when an older proxy has not sent
+   * it yet — the section is then not rendered at all.
+   */
+  analysisScope?: VardeVernAnalysisScope;
   configRevision: number;
   dbBacked: boolean;
 }

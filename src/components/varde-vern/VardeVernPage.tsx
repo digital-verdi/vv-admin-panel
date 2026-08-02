@@ -17,6 +17,7 @@ import {
 import { SelectField, NumberField } from '@/components/configuration/fields';
 import { vardeVernQueryOptions, saveVardeVernFn } from '@/server';
 import { Section, Badge, ColumnHeader, HelpTooltip, StatusRow } from './ui';
+import { AnalysisScopeSection } from './AnalysisScopeSection';
 import { EmptyState, LoadingState } from '@/components/shared';
 import { notifySuccess, notifyError } from '@/utils';
 import { SystemCapabilities } from '@/constants';
@@ -480,6 +481,8 @@ export function VardeVernPage() {
               <PresidioStatusCard status={data.presidio} canManage={canManage} />
             </div>
           </Section>
+
+          <AnalysisScopeSection scope={data.analysisScope} />
 
           <Section
             title="Entity matrix"

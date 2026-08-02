@@ -289,6 +289,32 @@ describe('VardeVernPage — table redesign + English-only UI', () => {
     expect(card).toHaveAttribute('data-can-manage', 'true');
   });
 
+  it('Overview renders the Analysis scope matrix when the proxy reports it', async () => {
+    queryValue = {
+      ...mockVern,
+      analysisScope: {
+        engines: [
+          { id: 'regex', label: 'Local PII engine', kind: 'authoritative' },
+          { id: 'presidio', label: 'Presidio Analyzer', kind: 'supplementary' },
+        ],
+        fields: [
+          { id: 'message_text:system', label: 'Message content — role: system', jsonPath: 'messages[].content', supplementary: false },
+        ],
+      },
+    };
+    renderPage();
+    const scope = await screen.findByRole('region', { name: 'Analysis scope' });
+    expect(within(scope).getByText('Message content — role: system')).toBeInTheDocument();
+    expect(within(scope).getByText('not analysed')).toBeInTheDocument();
+  });
+
+  it('Overview omits the Analysis scope matrix on an older proxy that does not report it', async () => {
+    // mockVern carries no analysisScope. Absent must mean "no claim", not an empty table.
+    renderPage();
+    await screen.findByRole('region', { name: 'Operational status' });
+    expect(screen.queryByRole('region', { name: 'Analysis scope' })).toBeNull();
+  });
+
   it('language detection falls back to a static Franc (nb, en) label on an older proxy', async () => {
     queryValue = { ...mockVern, languageRouting: undefined };
     renderPage();

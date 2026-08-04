@@ -86,25 +86,32 @@ vi.mock('@/utils', async (importOriginal) => {
   return { ...actual, notifySuccess: vi.fn(), notifyError: vi.fn() };
 });
 // click-ui Checkbox → a native checkbox carrying its aria-label (indeterminate renders unchecked here).
+// `label` is rendered too: the reset dialog passes its explanation that way, and a mock that dropped it
+// would let the text vanish from the real dialog without a test noticing.
 vi.mock('@clickhouse/click-ui', () => ({
   Checkbox: ({
     checked,
     onCheckedChange,
     disabled,
+    label,
     'aria-label': ariaLabel,
   }: {
     checked: boolean | 'indeterminate';
-    onCheckedChange?: () => void;
+    onCheckedChange?: (checked: boolean | 'indeterminate') => void;
     disabled?: boolean;
+    label?: React.ReactNode;
     'aria-label'?: string;
   }) => (
-    <input
-      type="checkbox"
-      checked={checked === true}
-      onChange={() => onCheckedChange?.()}
-      disabled={disabled}
-      aria-label={ariaLabel}
-    />
+    <label>
+      <input
+        type="checkbox"
+        checked={checked === true}
+        onChange={(e) => onCheckedChange?.(e.target.checked)}
+        disabled={disabled}
+        aria-label={ariaLabel}
+      />
+      {label}
+    </label>
   ),
 }));
 vi.mock('@/components/shared', () => ({
@@ -229,6 +236,8 @@ describe('DemoPage', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Reset demo counters' });
 
     expect(within(dialog).getByRole('checkbox')).not.toBeChecked();
+    expect(within(dialog).getByText(/product-interest/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/left in place unless you tick this/)).toBeInTheDocument();
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Reset counters' }));
     await waitFor(() =>

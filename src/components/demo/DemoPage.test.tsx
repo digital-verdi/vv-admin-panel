@@ -60,6 +60,11 @@ const setSelfServeFn = vi.fn().mockResolvedValue({ enabled: false, startsUsed: 4
 const revokeLinksFn = vi.fn().mockResolvedValue({ revoked: ['l1'] });
 const deleteLinksFn = vi.fn().mockResolvedValue({ deleted: ['l1'] });
 const terminateSessionsFn = vi.fn().mockResolvedValue({ terminated: ['s1'] });
+const resetCountersFn = vi.fn().mockResolvedValue({
+  status: 'ok',
+  capacity: { limit: 200, used: 0, reservations: 3, remaining: 197, revision: 5 },
+  reset: { startsUsed: 12, links: 3, profiles: 17, devices: 9, poll: 0 },
+});
 
 vi.mock('@/server', () => ({
   demoStatusQueryOptions: {
@@ -73,6 +78,7 @@ vi.mock('@/server', () => ({
   revokeDemoLinksFn: (a: unknown) => revokeLinksFn(a),
   deleteDemoLinksFn: (a: unknown) => deleteLinksFn(a),
   terminateDemoSessionsFn: (a: unknown) => terminateSessionsFn(a),
+  resetDemoCountersFn: (a: unknown) => resetCountersFn(a),
 }));
 vi.mock('@/hooks', () => ({ useCapabilities: () => ({ hasCapability: () => canManage }) }));
 vi.mock('@/utils', async (importOriginal) => {
@@ -149,6 +155,7 @@ describe('DemoPage', () => {
     revokeLinksFn.mockClear();
     deleteLinksFn.mockClear();
     terminateSessionsFn.mockClear();
+    resetCountersFn.mockClear();
   });
 
   it('renders capacity, session, and link stats from the status query', async () => {
@@ -199,6 +206,75 @@ describe('DemoPage', () => {
     await screen.findByRole('region', { name: 'Demo Mode' });
     fireEvent.click(screen.getByRole('button', { name: 'Set capacity' }));
     expect(await screen.findByRole('dialog', { name: 'Set demo capacity' })).toBeInTheDocument();
+  });
+
+  it('opens the reset dialog showing what each counter currently reads', async () => {
+    renderPage();
+    await screen.findByRole('region', { name: 'Demo Mode' });
+    fireEvent.click(screen.getByRole('button', { name: 'Reset counters' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Reset demo counters' });
+    expect(within(dialog).getByText('12')).toBeInTheDocument(); // capacity.used
+    expect(within(dialog).getByText('4')).toBeInTheDocument(); // selfServe.startsUsed
+    // expired 9 + failed 0 — NOT the 8 `closed` rows, whose data cascade has not run yet, so the backend
+    // deliberately leaves them. Counting them here would promise a deletion that does not happen.
+    expect(within(dialog).getByText('9')).toBeInTheDocument();
+    expect(within(dialog).queryByText('17')).toBeNull();
+  });
+
+  it('leaves the poll untouched by default — anonymous answers are not a counter', async () => {
+    renderPage();
+    await screen.findByRole('region', { name: 'Demo Mode' });
+    fireEvent.click(screen.getByRole('button', { name: 'Reset counters' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Reset demo counters' });
+
+    expect(within(dialog).getByRole('checkbox')).not.toBeChecked();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Reset counters' }));
+    await waitFor(() =>
+      expect(resetCountersFn).toHaveBeenCalledWith({
+        data: { expectedRevision: 4, includePoll: false },
+      }),
+    );
+  });
+
+  it('includes the poll only when the admin ticks the box', async () => {
+    renderPage();
+    await screen.findByRole('region', { name: 'Demo Mode' });
+    fireEvent.click(screen.getByRole('button', { name: 'Reset counters' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Reset demo counters' });
+
+    fireEvent.click(within(dialog).getByRole('checkbox'));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Reset counters' }));
+
+    await waitFor(() =>
+      expect(resetCountersFn).toHaveBeenCalledWith({
+        data: { expectedRevision: 4, includePoll: true },
+      }),
+    );
+  });
+
+  it('surfaces a stale revision as a retry prompt rather than a success', async () => {
+    resetCountersFn.mockResolvedValueOnce({ status: 'version-mismatch' });
+    const { notifySuccess, notifyError } = await import('@/utils');
+    vi.mocked(notifySuccess).mockClear();
+    vi.mocked(notifyError).mockClear();
+    renderPage();
+    await screen.findByRole('region', { name: 'Demo Mode' });
+    fireEvent.click(screen.getByRole('button', { name: 'Reset counters' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Reset demo counters' });
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Reset counters' }));
+
+    await waitFor(() => expect(notifyError).toHaveBeenCalled());
+    expect(notifySuccess).not.toHaveBeenCalled();
+  });
+
+  it('disables the reset without the management capability', async () => {
+    canManage = false;
+    renderPage();
+    await screen.findByRole('region', { name: 'Demo Mode' });
+    expect(screen.getByRole('button', { name: 'Reset counters' })).toBeDisabled();
   });
 
   it('renders an empty state when there are no demo links', async () => {

@@ -96,7 +96,11 @@ export type SetDemoCapacityResult =
   | { status: 'version-mismatch' }
   | { status: 'below-used' };
 
-/** What a counter reset actually zeroed — the backend reports it so the toast can be specific. */
+/**
+ * What a counter reset actually zeroed. The backend's audit line (`[Demo] counters reset`) is the record
+ * that matters; the panel does not surface these numbers today — the toast is a fixed string and the
+ * tiles re-read from `demo-status`. Typed anyway so the response is not silently `unknown`.
+ */
 export interface DemoResetCounts {
   startsUsed: number;
   links: number;

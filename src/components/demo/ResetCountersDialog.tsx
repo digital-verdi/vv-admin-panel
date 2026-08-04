@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Checkbox } from '@clickhouse/click-ui';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type * as t from '@/types';
 import { resetDemoCountersFn } from '@/server';
@@ -82,21 +83,20 @@ export function ResetCountersDialog({
           so a link you had already spent becomes usable again
         </li>
       </ul>
-      <label className="flex items-start gap-2.5 text-sm text-(--cui-color-text-default)">
-        <input
-          type="checkbox"
-          checked={includePoll}
-          onChange={(e) => setIncludePoll(e.target.checked)}
-          className="mt-0.5"
-        />
-        <span>
-          Also delete the {pollResponses} product-interest{' '}
-          {pollResponses === 1 ? 'answer' : 'answers'}
-          <span className="block text-xs text-(--cui-color-text-muted)">
-            Anonymous feedback, not a counter — left in place unless you tick this.
+      <Checkbox
+        id="demo-reset-include-poll"
+        checked={includePoll}
+        onCheckedChange={(checked) => setIncludePoll(checked === true)}
+        label={
+          <span className="text-sm text-(--cui-color-text-default)">
+            Also delete the {pollResponses} product-interest{' '}
+            {pollResponses === 1 ? 'answer' : 'answers'}
+            <span className="block text-xs text-(--cui-color-text-muted)">
+              Anonymous feedback, not a counter — left in place unless you tick this.
+            </span>
           </span>
-        </span>
-      </label>
+        }
+      />
       <p className="text-sm text-(--cui-color-text-muted)">
         Live sessions keep running, and the capacity limit is unchanged.
       </p>

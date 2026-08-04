@@ -2,9 +2,12 @@ import { useState, useEffect } from 'react';
 import { Checkbox } from '@clickhouse/click-ui';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type * as t from '@/types';
-import { resetDemoCountersFn } from '@/server';
-import { FormDialog } from '@/components/shared';
 import { notifySuccess, notifyError } from '@/utils';
+import { FormDialog } from '@/components/shared';
+import { resetDemoCountersFn } from '@/server';
+
+/** Opt-in, in ONE place: the initial state and the per-open reset must not be able to drift apart. */
+const POLL_INCLUDED_BY_DEFAULT = false;
 
 /**
  * Reset the demo counters to zero for a fresh campaign.
@@ -19,9 +22,6 @@ import { notifySuccess, notifyError } from '@/utils';
  * Optimistically locked like the capacity raise — a 409 comes back as a non-throwing result and turns
  * into a reload + retry prompt.
  */
-/** Opt-in, in ONE place: the initial state and the per-open reset must not be able to drift apart. */
-const POLL_INCLUDED_BY_DEFAULT = false;
-
 export function ResetCountersDialog({
   open,
   onClose,

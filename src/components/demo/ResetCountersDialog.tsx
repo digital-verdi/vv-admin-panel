@@ -77,6 +77,10 @@ export function ResetCountersDialog({
           Finished session records: <strong>{finishedSessions}</strong> removed
         </li>
         <li>Per-device limits: every browser may start its 5 demos again</li>
+        <li>
+          Named links: each gets its full <span className="font-mono">maxStarts</span> allowance back,
+          so a link you had already spent becomes usable again
+        </li>
       </ul>
       <label className="flex items-start gap-2.5 text-sm text-(--cui-color-text-default)">
         <input

@@ -71,8 +71,8 @@ export function RaiseCapacityDialog({
       onClose={onClose}
     >
       <p className="text-sm text-(--cui-color-text-muted)">
-        The global demo capacity is cumulative — used sessions are never returned, so raising it only
-        adds headroom. Currently {used} used of {currentLimit}.
+        Cleanup never returns used sessions, so raising the limit only adds headroom — to start over,
+        use “Reset counters”. Currently {used} used of {currentLimit}.
       </p>
       <div className="flex flex-col gap-1.5">
         <label

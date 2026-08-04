@@ -96,6 +96,20 @@ export type SetDemoCapacityResult =
   | { status: 'version-mismatch' }
   | { status: 'below-used' };
 
+/** What a counter reset actually zeroed — the backend reports it so the toast can be specific. */
+export interface DemoResetCounts {
+  startsUsed: number;
+  links: number;
+  profiles: number;
+  devices: number;
+  poll: number;
+}
+
+/** Same shape as a capacity raise: the backend's 409 becomes a non-throwing UI state, not an error. */
+export type ResetDemoCountersResult =
+  | { status: 'ok'; capacity: DemoCapacity; reset: DemoResetCounts }
+  | { status: 'version-mismatch' };
+
 export interface CreateDemoLinkResult {
   token: string;
   link: DemoLink;
@@ -122,4 +136,14 @@ export interface RaiseCapacityDialogProps {
 export interface CreateDemoLinkDialogProps {
   open: boolean;
   onClose: () => void;
+}
+
+export interface ResetCountersDialogProps {
+  open: boolean;
+  onClose: () => void;
+  used: number;
+  selfServeStarts: number;
+  finishedSessions: number;
+  pollResponses: number;
+  expectedRevision: number;
 }

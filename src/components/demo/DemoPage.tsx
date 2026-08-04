@@ -15,6 +15,7 @@ import { notifySuccess, notifyError } from '@/utils';
 import { useCapabilities } from '@/hooks';
 import { SystemCapabilities } from '@/constants';
 import { RaiseCapacityDialog } from './RaiseCapacityDialog';
+import { ResetCountersDialog } from './ResetCountersDialog';
 import { CreateDemoLinkDialog } from './CreateDemoLinkDialog';
 
 const LINK_STATUS_LABEL: Record<t.DemoLinkStatus, string> = {
@@ -114,6 +115,7 @@ export function DemoPage() {
   const { hasCapability } = useCapabilities();
   const canManage = hasCapability(SystemCapabilities.MANAGE_USERS);
   const [capacityOpen, setCapacityOpen] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
   const [createLinkOpen, setCreateLinkOpen] = useState(false);
   const [selectedLinkIds, setSelectedLinkIds] = useState<Set<string>>(() => new Set());
   const [selectedSessionIds, setSelectedSessionIds] = useState<Set<string>>(() => new Set());
@@ -240,18 +242,29 @@ export function DemoPage() {
       <section aria-label="Demo capacity">
         <div className="mb-3 flex items-center justify-between gap-3">
           <p className="text-sm text-(--cui-color-text-muted)">
-            Bounded, invite-free demo sessions. Global capacity is cumulative — cleanup never returns
-            it — so raising it only adds headroom.
+            Bounded, invite-free demo sessions. Cleanup never returns capacity, so raising the limit
+            only adds headroom — resetting the counters is a deliberate, separate action.
           </p>
-          <button
-            type="button"
-            onClick={() => setCapacityOpen(true)}
-            disabled={!canManage}
-            aria-disabled={!canManage || undefined}
-            className="shrink-0 rounded-lg border border-(--cui-color-stroke-default) bg-transparent px-3 py-1.5 text-sm text-(--cui-color-text-default) transition-colors hover:bg-(--cui-color-background-hover) disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Set capacity
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setResetOpen(true)}
+              disabled={!canManage}
+              aria-disabled={!canManage || undefined}
+              className="rounded-lg border border-(--cui-color-stroke-default) bg-transparent px-3 py-1.5 text-sm text-(--cui-color-text-default) transition-colors hover:bg-(--cui-color-background-hover) disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Reset counters
+            </button>
+            <button
+              type="button"
+              onClick={() => setCapacityOpen(true)}
+              disabled={!canManage}
+              aria-disabled={!canManage || undefined}
+              className="rounded-lg border border-(--cui-color-stroke-default) bg-transparent px-3 py-1.5 text-sm text-(--cui-color-text-default) transition-colors hover:bg-(--cui-color-background-hover) disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Set capacity
+            </button>
+          </div>
         </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Stat label="Capacity limit" value={capacity.limit} />
@@ -608,6 +621,15 @@ export function DemoPage() {
         onClose={() => setCapacityOpen(false)}
         currentLimit={capacity.limit}
         used={capacity.used}
+        expectedRevision={capacity.revision}
+      />
+      <ResetCountersDialog
+        open={resetOpen}
+        onClose={() => setResetOpen(false)}
+        used={capacity.used}
+        selfServeStarts={selfServe.startsUsed}
+        finishedSessions={profiles.closed + profiles.expired + profiles.failed}
+        pollResponses={poll.responses}
         expectedRevision={capacity.revision}
       />
       <CreateDemoLinkDialog open={createLinkOpen} onClose={() => setCreateLinkOpen(false)} />

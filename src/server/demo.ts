@@ -70,6 +70,30 @@ export const setDemoCapacityFn = createServerFn({ method: 'POST' })
     return { status: 'ok', capacity: body.capacity };
   });
 
+/**
+ * Zero the demo counters for a fresh campaign. Optimistically locked on the same revision as a capacity
+ * raise, so a 409 is a reload-and-retry, not an error boundary. `includePoll` is opt-in at the call site:
+ * the product-interest answers are real (anonymous) data with their own retention, not a counter.
+ */
+export const resetDemoCountersFn = createServerFn({ method: 'POST' })
+  .inputValidator(
+    z.object({ expectedRevision: z.number().int().min(0), includePoll: z.boolean().default(false) }),
+  )
+  .handler(async ({ data }): Promise<t.ResetDemoCountersResult> => {
+    const response = await apiFetch('/api/admin/demo/reset-counters', {
+      method: 'POST',
+      body: JSON.stringify({ ...data, confirm: true }),
+    });
+    if (response.status === 409) {
+      return { status: 'version-mismatch' };
+    }
+    if (!response.ok) {
+      await extractApiError(response, 'Failed to reset demo counters');
+    }
+    const body = (await response.json()) as { capacity: t.DemoCapacity; reset: t.DemoResetCounts };
+    return { status: 'ok', capacity: body.capacity, reset: body.reset };
+  });
+
 export const createDemoLinkFn = createServerFn({ method: 'POST' })
   .inputValidator(
     z.object({

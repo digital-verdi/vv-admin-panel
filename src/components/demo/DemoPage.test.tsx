@@ -216,7 +216,10 @@ describe('DemoPage', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Reset demo counters' });
     expect(within(dialog).getByText('12')).toBeInTheDocument(); // capacity.used
     expect(within(dialog).getByText('4')).toBeInTheDocument(); // selfServe.startsUsed
-    expect(within(dialog).getByText('17')).toBeInTheDocument(); // closed 8 + expired 9 + failed 0
+    // expired 9 + failed 0 — NOT the 8 `closed` rows, whose data cascade has not run yet, so the backend
+    // deliberately leaves them. Counting them here would promise a deletion that does not happen.
+    expect(within(dialog).getByText('9')).toBeInTheDocument();
+    expect(within(dialog).queryByText('17')).toBeNull();
   });
 
   it('leaves the poll untouched by default — anonymous answers are not a counter', async () => {

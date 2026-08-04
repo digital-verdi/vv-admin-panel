@@ -628,7 +628,7 @@ export function DemoPage() {
         onClose={() => setResetOpen(false)}
         used={capacity.used}
         selfServeStarts={selfServe.startsUsed}
-        finishedSessions={profiles.closed + profiles.expired + profiles.failed}
+        finishedSessions={profiles.expired + profiles.failed}
         pollResponses={poll.responses}
         expectedRevision={capacity.revision}
       />
